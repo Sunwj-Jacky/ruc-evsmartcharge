@@ -1,7 +1,6 @@
 # 深圳市充电基础设施需求特征与分时定价策略研究
 ### Empirical Study on EV Charging Infrastructure Demand and Pricing Strategies in Shenzhen
 
----
 
 ## 项目简介 (Introduction)
 本项目响应“双碳”目标，基于深圳市 275 个充电站点的实证数据，结合空间性能分析与经济建模，深入探讨了充电基础设施的需求特征。研究提出了一套优化后的分时定价（Time-of-Use Pricing）方案，旨在平衡电力负荷并提升充电设施的运营效率。
