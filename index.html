@@ -1859,7 +1859,28 @@
     <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
     <script src="./data/stations-data.js"></script>
     <script src="./shp/shenzhen-boundary.js"></script>
-    <script src="./data/price-data.js"></script>
+    <script src="./data/price-data-1.js"></script>
+    <script src="./data/price-data-2.js"></script>
+    <script src="./data/price-data-3.js"></script>
+    <script>
+      window.PRICE_DATA = {
+        meta: {
+          ...(window.PRICE_DATA_PART_1?.meta || {}),
+          ...(window.PRICE_DATA_PART_2?.meta || {}),
+          ...(window.PRICE_DATA_PART_3?.meta || {}),
+        },
+        s_price: {
+          ...(window.PRICE_DATA_PART_1?.s_price || {}),
+          ...(window.PRICE_DATA_PART_2?.s_price || {}),
+          ...(window.PRICE_DATA_PART_3?.s_price || {}),
+        },
+        e_price: {
+          ...(window.PRICE_DATA_PART_1?.e_price || {}),
+          ...(window.PRICE_DATA_PART_2?.e_price || {}),
+          ...(window.PRICE_DATA_PART_3?.e_price || {}),
+        },
+      };
+    </script>
     <script src="./data/flow-data.js"></script>
 
     <script>
