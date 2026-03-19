@@ -13,13 +13,13 @@
 - 定价策略优化：测算不同时段价格对充电需求的调节效应及经济外部性。
 
 ## 研究团队 (Research Team)
-- **孙炜杰 (Sun WJ)** - 人民大学信息学院 (School of Information, RUC)
-- **李易安安** - 人民大学信息学院 (School of Information, RUC)
-- **王砺寒** - 人民大学财政金融学院 (School of Finance, RUC)
-- **姚在桐** - 人民大学财政金融学院 (School of Finance, RUC)
+- **孙炜杰 (Sun WJ)** - 中国人民大学信息学院 (School of Information, RUC)
+- **李易安安** - 中国人民大学信息学院 (School of Information, RUC)
+- **王砺寒** - 中国人民大学财政金融学院 (School of Finance, RUC)
+- **姚在桐** - 中国人民大学财政金融学院 (School of Finance, RUC)
 
 ## 指导教师 (Supervisor)
-- **郑㼆 (Zheng Ying)** - 人民大学应用经济学院 (School of Applied Economics, RUC)
+- **郑㼆 (Zheng Ying)** - 中国人民大学应用经济学院 (School of Applied Economics, RUC)
 
 ## 技术实现 (Technical Implementation)
 - 数据可视化：HTML5 / JavaScript
