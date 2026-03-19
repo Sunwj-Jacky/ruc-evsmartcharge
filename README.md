@@ -6,8 +6,7 @@
 本项目响应“双碳”目标，基于深圳市 275 个充电站点的实证数据，结合空间性能分析与经济建模，深入探讨了充电基础设施的需求特征。研究提出了一套优化后的分时定价（Time-of-Use Pricing）方案，旨在平衡电力负荷并提升充电设施的运营效率。
 
 ## 在线演示 (Live Demo)
-访问链接：https://你的项目名.edgeone.app
-(建议在移动端或 Chrome 浏览器下访问以获取最佳交互体验)
+访问链接：https://ruc-smartcharge-eqtroiyz.edgeone.cool/
 
 ## 核心研究内容 (Key Research)
 - 空间特征分析：基于经纬度数据的充电站地理分布图谱。
