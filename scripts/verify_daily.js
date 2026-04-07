@@ -1,0 +1,10 @@
+const fs = require('fs');
+const path = require('path');
+const c = fs.readFileSync(path.join(__dirname, '../data/daily-base-prices.js'), 'utf8');
+const startIdx = c.indexOf('=');
+const jsonStr = c.substring(startIdx + 1).trim();
+const d = JSON.parse(jsonStr);
+console.log('Dates:', Object.keys(d).length);
+console.log('Sample 595 on 2022-09-01:', d['2022-09-01']?.['595']?.slice(0, 6));
+console.log('Sample 595 on 2022-09-15:', d['2022-09-15']?.['595']?.slice(0, 6));
+console.log('Sample 595 on 2023-02-28:', d['2023-02-28']?.['595']?.slice(0, 6));

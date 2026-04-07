@@ -15,58 +15,70 @@ def read_csv(path):
     return header, data
 
 
-def parse_dt(value):
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+def parse_datetime(value):
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d"):
         try:
             return datetime.strptime(value, fmt)
-        except ValueError:
+        except Exception:
             continue
-    raise ValueError(f"Unsupported datetime format: {value}")
+    raise ValueError(f"Unrecognized date format: {value}")
 
 
-def build_price_struct(header, rows):
-    time_col = header[0]
-    taz_cols = header[1:]
-    times = [parse_dt(r[0]) for r in rows]
-    days = sorted({t.strftime("%Y-%m-%d") for t in times})
-    months = sorted({t.strftime("%Y-%m") for t in times})
+def get_time_col(header):
+    for col in header[:2]:
+        if col.lower() in ("date", "day", "time", "datetime"):
+            return col
+    return header[0]
+
+
+def build_price_struct(header, data):
+    time_col = get_time_col(header)
+    t_index = header.index(time_col)
+    taz_cols = [c for c in header if c != time_col]
+    taz_idx = {c: header.index(c) for c in taz_cols}
+
+    times = [parse_datetime(row[t_index]) for row in data]
+
+    meta_days = sorted({t.strftime("%Y-%m-%d") for t in times})
+    meta_months = sorted({t.strftime("%Y-%m") for t in times})
 
     out = {}
-    for idx, taz in enumerate(taz_cols):
-        series = [float(r[idx + 1]) if r[idx + 1] else 0.0 for r in rows]
-
+    for taz in taz_cols:
+        idx = taz_idx[taz]
+        series = [float(row[idx]) if row[idx] else 0.0 for row in data]
         # hourly avg
-        hour_sum = {h: 0.0 for h in range(24)}
-        hour_cnt = {h: 0 for h in range(24)}
-        for t, val in zip(times, series):
-            hour_sum[t.hour] += val
-            hour_cnt[t.hour] += 1
-        hourly_avg = [hour_sum[h] / hour_cnt[h] if hour_cnt[h] else 0.0 for h in range(24)]
+        hourly_sum = [0.0] * 24
+        hourly_cnt = [0] * 24
+        for t, v in zip(times, series):
+            h = t.hour
+            hourly_sum[h] += v
+            hourly_cnt[h] += 1
+        hourly_avg = [hourly_sum[h] / hourly_cnt[h] if hourly_cnt[h] else 0.0 for h in range(24)]
 
         # monthly hourly avg
         monthly_hourly = {}
-        for m in months:
-            m_sum = {h: 0.0 for h in range(24)}
-            m_cnt = {h: 0 for h in range(24)}
-            for t, val in zip(times, series):
+        for m in meta_months:
+            m_sum = [0.0] * 24
+            m_cnt = [0] * 24
+            for t, v in zip(times, series):
                 if t.strftime("%Y-%m") == m:
-                    m_sum[t.hour] += val
-                    m_cnt[t.hour] += 1
+                    h = t.hour
+                    m_sum[h] += v
+                    m_cnt[h] += 1
             monthly_hourly[m] = [m_sum[h] / m_cnt[h] if m_cnt[h] else 0.0 for h in range(24)]
 
-        # heatmap daily x hour
-        day_map = {d: [0.0] * 24 for d in days}
-        day_cnt = {d: [0] * 24 for d in days}
-        for t, val in zip(times, series):
+        # heatmap (days x hours)
+        day_map = {d: [0.0] * 24 for d in meta_days}
+        day_cnt = {d: [0] * 24 for d in meta_days}
+        for t, v in zip(times, series):
             d = t.strftime("%Y-%m-%d")
-            day_map[d][t.hour] += val
-            day_cnt[d][t.hour] += 1
+            h = t.hour
+            day_map[d][h] += v
+            day_cnt[d][h] += 1
         heat_values = []
-        for d in days:
-            heat_values.append([
-                day_map[d][h] / day_cnt[d][h] if day_cnt[d][h] else 0.0
-                for h in range(24)
-            ])
+        for d in meta_days:
+            row = [day_map[d][h] / day_cnt[d][h] if day_cnt[d][h] else 0.0 for h in range(24)]
+            heat_values.append(row)
 
         out[str(taz)] = {
             "hourly": series,
@@ -75,53 +87,53 @@ def build_price_struct(header, rows):
             "heatmap": {"values": heat_values},
         }
 
-    return {"meta": {"days": days, "months": months}, "data": out}
+    return out, meta_days, meta_months
 
 
-def build_flow_struct(header, rows):
-    time_col = header[0]
-    taz_cols = header[1:]
-    times = [parse_dt(r[0]) for r in rows]
-    months = sorted({t.strftime("%Y-%m") for t in times})
+def build_flow_struct(header, data, months):
+    time_col = get_time_col(header)
+    t_index = header.index(time_col)
+    taz_cols = [c for c in header if c != time_col]
+    taz_idx = {c: header.index(c) for c in taz_cols}
+    times = [parse_datetime(row[t_index]) for row in data]
 
     out = {}
-    for idx, taz in enumerate(taz_cols):
-        series = [float(r[idx + 1]) if r[idx + 1] else 0.0 for r in rows]
+    for taz in taz_cols:
+        idx = taz_idx[taz]
+        series = [float(row[idx]) if row[idx] else 0.0 for row in data]
         monthly = {}
         for m in months:
-            m_sum = {h: 0.0 for h in range(24)}
-            m_cnt = {h: 0 for h in range(24)}
-            for t, val in zip(times, series):
+            m_sum = [0.0] * 24
+            m_cnt = [0] * 24
+            for t, v in zip(times, series):
                 if t.strftime("%Y-%m") == m:
-                    m_sum[t.hour] += val
-                    m_cnt[t.hour] += 1
+                    h = t.hour
+                    m_sum[h] += v
+                    m_cnt[h] += 1
             monthly[m] = [m_sum[h] / m_cnt[h] if m_cnt[h] else 0.0 for h in range(24)]
         out[str(taz)] = {"monthly": monthly}
+    return out
 
-    return {"meta": {"months": months}, "data": out}
 
+s_header, s_data = read_csv(os.path.join(base, "s_price.csv"))
+e_header, e_data = read_csv(os.path.join(base, "e_price.csv"))
+vol_header, vol_data = read_csv(os.path.join(base, "volume.csv"))
+occ_header, occ_data = read_csv(os.path.join(base, "occupancy.csv"))
 
-s_header, s_rows = read_csv(os.path.join(base, "s_price.csv"))
-e_header, e_rows = read_csv(os.path.join(base, "e_price.csv"))
-vol_header, vol_rows = read_csv(os.path.join(base, "volume.csv"))
-occ_header, occ_rows = read_csv(os.path.join(base, "occupancy.csv"))
-
-s_struct = build_price_struct(s_header, s_rows)
-e_struct = build_price_struct(e_header, e_rows)
+s_struct, meta_days, meta_months = build_price_struct(s_header, s_data)
+e_struct, _, _ = build_price_struct(e_header, e_data)
 
 price_data = {
-    "meta": s_struct["meta"],
-    "s_price": s_struct["data"],
-    "e_price": e_struct["data"],
+    "meta": {"days": meta_days, "months": meta_months},
+    "s_price": s_struct,
+    "e_price": e_struct,
 }
 
-vol_struct = build_flow_struct(vol_header, vol_rows)
-occ_struct = build_flow_struct(occ_header, occ_rows)
-
+flow_months = sorted({parse_datetime(row[vol_header.index(get_time_col(vol_header))]).strftime("%Y-%m") for row in vol_data})
 flow_data = {
-    "meta": vol_struct["meta"],
-    "volume": vol_struct["data"],
-    "occupancy": occ_struct["data"],
+    "meta": {"months": flow_months},
+    "volume": build_flow_struct(vol_header, vol_data, flow_months),
+    "occupancy": build_flow_struct(occ_header, occ_data, flow_months),
 }
 
 with open(os.path.join(base, "price-data.js"), "w", encoding="utf-8") as f:

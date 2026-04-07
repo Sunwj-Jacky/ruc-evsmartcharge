@@ -1,0 +1,3214 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>充电站动态定价与运营辅助决策系统（单文件版）</title>
+
+    <!-- Leaflet (map) -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+
+    <style>
+      :root {
+        --bg: #ffffff;
+        --panel: #ffffff;
+        --muted: #64748b;
+        --text: #0f172a;
+        --border: #e2e8f0;
+        --shadow: 0 12px 30px rgba(2, 8, 23, 0.08);
+        --brand: #fbbf24; /* 首页暖黄色，作为主色 */
+        --accent: #fb923c; /* 暖橙色，用作辅助高亮 */
+        --poi-biz: #1d4ed8; /* 深蓝 */
+        --poi-food: #0f766e; /* 深绿 */
+        --poi-life: #b91c1c; /* 深红 */
+
+        /* Cover palette (Home) */
+        --cover-bg: #1a1c23; /* 深空灰 */
+        --cover-purple: #fbbf24; /* 暖黄色，用于主标题强调 */
+        --cover-mint: #34d399; /* 薄荷绿（留作按钮和电流线条） */
+        --cover-ivory: #f8f8f8; /* 象牙白 */
+        --cover-gray: #d1d5db; /* 浅灰 */
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background: radial-gradient(900px 600px at 20% 0%, rgba(37, 99, 235, 0.08), transparent 60%),
+          radial-gradient(800px 600px at 90% 20%, rgba(6, 182, 212, 0.10), transparent 55%),
+          var(--bg);
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial,
+          "Noto Sans", "Liberation Sans", sans-serif;
+      }
+
+      .app {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Top navigation (task bar) */
+      .topnav {
+        height: 72px;
+        border-bottom: 1px solid var(--border);
+        padding: 10px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: rgba(255, 255, 255, 0.78);
+        backdrop-filter: blur(10px);
+      }
+      .topnav .left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-width: 0;
+      }
+      .logoMark {
+        width: 34px;
+        height: 34px;
+        border-radius: 12px;
+        background: radial-gradient(14px 14px at 30% 30%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.05)),
+          linear-gradient(135deg, rgba(37, 99, 235, 1), rgba(6, 182, 212, 1));
+        box-shadow: 0 10px 24px rgba(2, 8, 23, 0.12);
+        border: 1px solid rgba(2, 6, 23, 0.08);
+      }
+      .brandBlock {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .brandBlock .kicker {
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        font-weight: 950;
+        color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .brandBlock .sub {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .tabs {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px;
+        border: 1px solid rgba(248, 250, 252, 0.16);
+        background: rgba(15, 23, 42, 0.86);
+        border-radius: 999px;
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.35);
+      }
+      .tabs a {
+        text-decoration: none;
+        color: rgba(248, 250, 252, 0.86);
+        font-size: 12px;
+        font-weight: 900;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        transition: background 160ms ease, transform 160ms ease, border-color 160ms ease;
+      }
+      .tabs a:hover {
+        background: rgba(248, 250, 252, 0.08);
+        transform: translateY(-1px);
+        border-color: rgba(248, 250, 252, 0.26);
+      }
+      .tabs a.active {
+        background: rgba(251, 191, 36, 0.22);
+        border-color: rgba(251, 191, 36, 0.75);
+        box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.32);
+      }
+      .topnav .right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        background: rgba(255, 255, 255, 0.82);
+        white-space: nowrap;
+      }
+      .chip .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--brand), var(--accent));
+        box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.10);
+      }
+
+      /* Main */
+      .main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      .content {
+        padding: 14px;
+        height: calc(100vh - 72px);
+        overflow: auto;
+      }
+      .frame {
+        min-height: 100%;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: var(--shadow);
+        padding: 12px;
+        overflow: visible;
+      }
+
+      /* Pages container */
+      .page {
+        min-height: 100%;
+        display: none;
+      }
+      .page.active {
+        display: block;
+      }
+      .page.scrollable {
+        min-height: 120vh;
+        padding-bottom: 32px;
+        overflow: visible;
+      }
+      .dashboardFill {
+        height: 100%;
+        min-height: calc(100vh - 110px);
+      }
+
+      /* Home page */
+      .homeWrap {
+        height: 100%;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 12px;
+      }
+      .cover {
+        position: relative;
+        height: 100%;
+        border-radius: 18px;
+        overflow: hidden;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: #000;
+        box-shadow: 0 24px 80px rgba(2, 8, 23, 0.35);
+        /* 整张封面图作为背景 */
+        background-image: url("./cover.png");
+        background-size: cover;
+        background-position: center;
+        display: flex;
+        flex-direction: column;
+      }
+      .cover::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(520px 320px at 18% 24%, rgba(26, 28, 35, 0.78), transparent 70%),
+          linear-gradient(90deg, rgba(26, 28, 35, 0.90) 0%, rgba(26, 28, 35, 0.65) 38%, transparent 72%);
+        pointer-events: none;
+      }
+      .coverInner {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        padding: 48px 64px 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 28px;
+        background: transparent;
+      }
+      .coverText {
+        max-width: 640px;
+      }
+      .coverBadge {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(248, 248, 248, 0.18);
+        background: rgba(248, 248, 248, 0.06);
+        color: var(--cover-gray);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .coverBadge .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--cover-purple), var(--cover-mint));
+        box-shadow: 0 0 0 5px rgba(122, 61, 184, 0.16);
+      }
+      .coverTitle {
+        margin: 16px 0 0;
+        font-size: 64px;
+        line-height: 1.08;
+        letter-spacing: -0.04em;
+        color: var(--cover-ivory);
+        text-shadow: 0 2px 0 rgba(0, 0, 0, 0.10);
+      }
+      .coverTitle .em {
+        color: var(--cover-purple);
+      }
+      .coverSub {
+        margin: 16px 0 0;
+        font-size: 24px;
+        line-height: 1.55;
+        color: rgba(209, 213, 219, 0.92);
+      }
+      .coverDesc {
+        margin: 16px 0 0;
+        font-size: 14px;
+        line-height: 1.8;
+        color: rgba(209, 213, 219, 0.78);
+        max-width: 62ch;
+      }
+      .coverActions {
+        margin-top: 22px;
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .coverBtn {
+        font-size: 28px;
+        font-weight: 900;
+        padding: 12px 16px;
+        border-radius: 10px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        border: 1px solid rgba(251, 191, 36, 0.48);
+        background: linear-gradient(135deg, rgba(251, 191, 36, 0.98), rgba(251, 146, 60, 0.92));
+        color: #0b1220;
+        box-shadow: 0 18px 44px rgba(251, 191, 36, 0.32);
+        transition: filter 160ms ease;
+      }
+      .coverBtn:hover {
+        filter: brightness(1.10);
+      }
+      .coverLink {
+        font-size: 14px;
+        font-weight: 800;
+        color: rgba(248, 248, 248, 0.90);
+        text-decoration: none;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(251, 191, 36, 0.26);
+        background: rgba(15, 23, 42, 0.55);
+        transition: filter 160ms ease, background 160ms ease;
+      }
+      .coverLink:hover {
+        filter: brightness(1.06);
+        background: rgba(248, 248, 248, 0.08);
+      }
+      /* 取消右侧透明框：整张图片直接作为背景，这里不再额外覆盖内容 */
+      .coverFooter {
+        position: relative;
+        left: auto;
+        right: auto;
+        bottom: auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 14px;
+        color: rgba(209, 213, 219, 0.62);
+        padding: 16px 64px 18px;
+        background: linear-gradient(180deg, transparent, rgba(26, 28, 35, 0.55));
+      }
+      .ipMark {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 1px solid rgba(122, 61, 184, 0.22);
+        background: rgba(122, 61, 184, 0.10);
+        color: rgba(248, 248, 248, 0.92);
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .ipMark svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* 首屏缓入动画（0.8s，无弹跳） */
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .animIn {
+        animation: fadeUp 0.8s ease-out both;
+      }
+      .delay1 {
+        animation-delay: 0.06s;
+      }
+      .delay2 {
+        animation-delay: 0.14s;
+      }
+      .delay3 {
+        animation-delay: 0.22s;
+      }
+      .delay4 {
+        animation-delay: 0.30s;
+      }
+      .hero {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 12px;
+        align-items: stretch;
+        min-height: 0;
+      }
+      .heroLeft,
+      .heroRight {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.92);
+        overflow: hidden;
+      }
+      .heroLeft {
+        padding: 18px 18px 16px;
+        position: relative;
+        overflow: hidden;
+      }
+      .heroLeft::before {
+        content: "";
+        position: absolute;
+        inset: -60px -60px auto -60px;
+        height: 220px;
+        background: radial-gradient(220px 160px at 35% 40%, rgba(37, 99, 235, 0.22), transparent 60%),
+          radial-gradient(260px 180px at 70% 30%, rgba(6, 182, 212, 0.20), transparent 60%);
+        pointer-events: none;
+      }
+      .heroLeft::after {
+        content: "";
+        position: absolute;
+        inset: auto -60px -80px -60px;
+        height: 240px;
+        background: radial-gradient(320px 200px at 30% 45%, rgba(2, 6, 23, 0.05), transparent 60%);
+        pointer-events: none;
+      }
+      .heroLeft > * {
+        position: relative;
+        z-index: 1;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(37, 99, 235, 0.25);
+        background: rgba(37, 99, 235, 0.06);
+        font-size: 12px;
+        color: #0f172a;
+        font-weight: 800;
+      }
+      .heroTitle {
+        margin: 12px 0 0;
+        font-size: 30px;
+        line-height: 1.12;
+        letter-spacing: -0.04em;
+      }
+      .heroTitle .grad {
+        background: linear-gradient(90deg, rgba(37, 99, 235, 1), rgba(6, 182, 212, 1));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .heroDesc {
+        margin: 10px 0 0;
+        font-size: 13px;
+        line-height: 1.7;
+        color: #334155;
+        max-width: 62ch;
+      }
+      .ctaRow {
+        margin-top: 14px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .btn.primary {
+        background: rgba(37, 99, 235, 0.10);
+        border-color: rgba(37, 99, 235, 0.45);
+      }
+      .btn.primary:hover {
+        background: rgba(37, 99, 235, 0.14);
+      }
+      .miniNote {
+        margin-top: 10px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .featureGrid {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+      .feat {
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        border-radius: 14px;
+        padding: 10px;
+        background: linear-gradient(180deg, rgba(248, 250, 252, 0.95), rgba(255, 255, 255, 0.9));
+      }
+      .feat .h {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 6px;
+      }
+      .feat .h b {
+        font-size: 12px;
+      }
+      .pill {
+        font-size: 10px;
+        color: #0f172a;
+        border: 1px solid rgba(2, 6, 23, 0.14);
+        background: rgba(2, 6, 23, 0.03);
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-weight: 900;
+        white-space: nowrap;
+      }
+      .feat p {
+        margin: 0;
+        font-size: 11px;
+        color: #475569;
+        line-height: 1.6;
+      }
+      .heroRight {
+        position: relative;
+        padding: 14px;
+        background:
+          radial-gradient(800px 450px at 40% 0%, rgba(37, 99, 235, 0.18), transparent 55%),
+          radial-gradient(700px 420px at 90% 15%, rgba(6, 182, 212, 0.18), transparent 55%),
+          rgba(255, 255, 255, 0.92);
+      }
+      .previewCard {
+        height: 100%;
+        border: 1px solid rgba(226, 232, 240, 0.85);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 18px 40px rgba(2, 8, 23, 0.10);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .previewTop {
+        padding: 12px 12px 10px;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+      .previewTop .t {
+        font-size: 12px;
+        font-weight: 900;
+      }
+      .previewTop .s {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .previewBody {
+        padding: 12px;
+        display: grid;
+        gap: 10px;
+        flex: 1;
+        min-height: 0;
+      }
+      .kpiRow {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+      .kpi {
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        border-radius: 14px;
+        padding: 10px;
+        background: rgba(248, 250, 252, 0.95);
+      }
+      .kpi .k {
+        font-size: 10px;
+        color: var(--muted);
+        font-weight: 800;
+      }
+      .kpi .v {
+        margin-top: 4px;
+        font-size: 16px;
+        font-weight: 1000;
+      }
+      .spark {
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        border-radius: 14px;
+        padding: 10px;
+        background: rgba(248, 250, 252, 0.95);
+      }
+      .spark .k {
+        font-size: 10px;
+        color: var(--muted);
+        font-weight: 800;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .spark svg {
+        width: 100%;
+        height: 70px;
+        margin-top: 8px;
+      }
+
+      /* Dashboard layout */
+      .dash {
+        height: 100%;
+        min-height: calc(100vh - 110px);
+        display: flex;
+        gap: 12px;
+      }
+      .mapCol {
+        flex: 0.65;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        background: #fff;
+      }
+      .panelCol {
+        flex: 0.35;
+        min-width: 320px;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        background: #fff;
+      }
+      .sectionHeader {
+        height: 40px;
+        border-bottom: 1px solid var(--border);
+        padding: 0 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .sectionHeader .title {
+        font-weight: 700;
+        color: #0f172a;
+      }
+      #map {
+        height: calc(100% - 40px);
+        width: 100%;
+      }
+      .panelBody {
+        padding: 12px;
+        height: calc(100% - 40px);
+        overflow: auto;
+        display: grid;
+        gap: 12px;
+      }
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 12px;
+        background: #fff;
+      }
+      .cardTitle {
+        font-size: 12px;
+        font-weight: 800;
+        margin-bottom: 8px;
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+      .stat .label {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .stat .value {
+        margin-top: 4px;
+        font-size: 18px;
+        font-weight: 900;
+      }
+      .vBrand {
+        color: var(--brand);
+      }
+      .vAcc {
+        color: #059669;
+      }
+      .vHot {
+        color: #e11d48;
+      }
+
+      .row2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .kv {
+        border: 1px dashed rgba(2, 6, 23, 0.15);
+        border-radius: 12px;
+        padding: 10px;
+      }
+      .kv .k {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .kv .v {
+        margin-top: 4px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .hint {
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .chart {
+        height: 200px;
+        width: 100%;
+      }
+      .chartTall {
+        height: 260px;
+      }
+      .chartMedium {
+        height: 280px;
+      }
+      .chartHeat {
+        height: 720px;
+      }
+      .priceRow {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        align-items: start;
+      }
+
+      .controls {
+        display: grid;
+        gap: 10px;
+      }
+      .control {
+        display: grid;
+        gap: 6px;
+      }
+      .control label {
+        font-size: 11px;
+        color: var(--muted);
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      input[type="range"] {
+        width: 100%;
+      }
+
+      .btnRow {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .btn {
+        border: 1px solid rgba(37, 99, 235, 0.35);
+        background: rgba(37, 99, 235, 0.08);
+        color: #0f172a;
+        padding: 10px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: transform 140ms ease, background 140ms ease;
+      }
+      .btn:hover {
+        transform: translateY(-1px);
+        background: rgba(37, 99, 235, 0.12);
+      }
+      .btn.secondary {
+        border-color: rgba(2, 6, 23, 0.18);
+        background: rgba(2, 6, 23, 0.03);
+        color: #0f172a;
+      }
+
+      /* Analytics page */
+      .grid2 {
+        height: 100%;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 12px;
+      }
+      .headerCard {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 12px;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .headerCard .h {
+        font-size: 14px;
+        font-weight: 900;
+        color: #0f172a;
+        margin-bottom: 4px;
+      }
+      .chartsGrid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        min-height: 0;
+        align-items: stretch;
+      }
+      .chartsGrid.stationsGrid {
+        grid-auto-rows: auto;
+      }
+      .stationCard {
+        min-height: auto;
+        height: auto;
+      }
+      .stationSummaryGrid {
+        gap: 18px;
+      }
+
+      /* Analytics article layout */
+      .paperArticle {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 26px 30px 32px;
+        display: grid;
+        gap: 24px;
+      }
+      .paperSection {
+        display: grid;
+        gap: 16px;
+      }
+      .paperSection h3 {
+        font-size: 16px;
+        font-weight: 800;
+        color: #0f172a;
+      }
+      .paperParagraph {
+        font-size: 13px;
+        color: #334155;
+        line-height: 1.9;
+        margin: 0;
+      }
+      .paperFigure {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+        border-radius: 16px;
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        background: rgba(248, 250, 252, 0.7);
+      }
+      .paperFigure img {
+        width: 100%;
+        border-radius: 12px;
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        background: #fff;
+      }
+      .paperFigure .cap {
+        font-size: 11px;
+        color: #475569;
+        font-weight: 700;
+      }
+      .paperGrid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+      @media (max-width: 980px) {
+        .paperGrid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .chartCard {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 12px;
+        background: #fff;
+        min-height: 260px;
+        display: flex;
+        flex-direction: column;
+      }
+      .chartCard .t {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .chartCard .t .name {
+        font-size: 12px;
+        font-weight: 900;
+        color: #0f172a;
+      }
+      .chartCard .t .note {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .chartFlex {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
+
+      /* Simulator */
+      .simulatorSection {
+        background: #f8fafc;
+        border: 1px solid rgba(226, 232, 240, 0.8);
+        border-radius: 18px;
+        padding: 18px;
+        display: grid;
+        gap: 18px;
+      }
+      .simHeader {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .simTitle {
+        font-size: 18px;
+        font-weight: 800;
+        color: #0f172a;
+      }
+      .simNote {
+        font-size: 12px;
+        color: #64748b;
+      }
+      .simHint {
+        font-size: 12px;
+        color: #475569;
+        background: rgba(15, 23, 42, 0.06);
+        padding: 6px 10px;
+        border-radius: 999px;
+      }
+      .simGrid {
+        display: grid;
+        grid-template-columns: 0.9fr 1.1fr;
+        gap: 16px;
+      }
+      .simPanel {
+        display: grid;
+        gap: 14px;
+      }
+      .simBlock {
+        background: #fff;
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        border-radius: 14px;
+        padding: 12px;
+        display: grid;
+        gap: 10px;
+      }
+      .simBlockTitle {
+        font-size: 13px;
+        font-weight: 700;
+        color: #0f172a;
+      }
+      .toggleRow {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .metricGrid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .metricCard {
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        border-radius: 12px;
+        padding: 10px;
+        background: #f8fafc;
+        display: grid;
+        gap: 4px;
+      }
+      .metricLabel {
+        font-size: 11px;
+        color: #64748b;
+      }
+      .metricValue {
+        font-size: 14px;
+        font-weight: 800;
+        color: #0f172a;
+      }
+      .metricDesc {
+        font-size: 11px;
+        color: #94a3b8;
+        line-height: 1.6;
+      }
+      .simExplain {
+        display: grid;
+        gap: 6px;
+        font-size: 11px;
+        color: #64748b;
+        line-height: 1.7;
+        padding: 8px 2px 0;
+      }
+      .simVisual {
+        background: #fff;
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        border-radius: 14px;
+        padding: 12px;
+        display: grid;
+        gap: 10px;
+      }
+      .simChartHeader {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+      }
+      .simTiny {
+        font-size: 11px;
+        color: #94a3b8;
+      }
+      .simChartRow {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .simTableBlock {
+        background: #fff;
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        border-radius: 14px;
+        padding: 12px;
+        display: grid;
+        gap: 10px;
+      }
+      .tableWrap {
+        overflow: auto;
+      }
+      .tableWrap table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .tableWrap th,
+      .tableWrap td {
+        border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+        padding: 8px;
+        text-align: left;
+      }
+      @media (max-width: 980px) {
+        .simGrid {
+          grid-template-columns: 1fr;
+        }
+        .metricGrid {
+          grid-template-columns: 1fr;
+        }
+        .simChartRow {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* Resources */
+      .papers {
+        height: 100%;
+        display: grid;
+        grid-template-rows: auto auto 1fr;
+        gap: 12px;
+      }
+      .resToolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: #fff;
+      }
+      .searchBox {
+        flex: 1;
+        min-width: 200px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid rgba(226, 232, 240, 0.95);
+        border-radius: 999px;
+        background: rgba(248, 250, 252, 0.9);
+      }
+      .searchBox input {
+        border: none;
+        outline: none;
+        width: 100%;
+        font-size: 12px;
+        background: transparent;
+        color: #0f172a;
+      }
+      .chipRow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      .chipBtn {
+        border: 1px solid rgba(251, 191, 36, 0.30);
+        background: rgba(251, 191, 36, 0.14);
+        color: #0f172a;
+        padding: 8px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 900;
+        cursor: pointer;
+        transition: filter 150ms ease, transform 150ms ease;
+        user-select: none;
+        white-space: nowrap;
+      }
+      .chipBtn:hover {
+        filter: brightness(1.06);
+        transform: translateY(-1px);
+      }
+      .chipBtn.active {
+        background: rgba(251, 191, 36, 0.28);
+        border-color: rgba(251, 191, 36, 0.65);
+        box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.18);
+      }
+      .paperGrid {
+        overflow: auto;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        padding-right: 4px;
+      }
+      .paperCard {
+        border: 1px solid rgba(226, 232, 240, 0.95);
+        border-radius: 16px;
+        padding: 14px;
+        background:
+          radial-gradient(700px 260px at 20% 0%, rgba(251, 191, 36, 0.10), transparent 55%),
+          linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(248, 250, 252, 0.92));
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 12px;
+        box-shadow: 0 16px 40px rgba(2, 8, 23, 0.06);
+        transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+      }
+      .paperCard:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 20px 54px rgba(2, 8, 23, 0.10);
+        border-color: rgba(251, 191, 36, 0.35);
+      }
+      .paperTop {
+        display: flex;
+        gap: 12px;
+      }
+      .paperIcon {
+        width: 38px;
+        height: 38px;
+        border-radius: 14px;
+        background: rgba(15, 23, 42, 0.92);
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(248, 250, 252, 0.12);
+        flex: none;
+      }
+      .paperIcon svg {
+        width: 18px;
+        height: 18px;
+        fill: none;
+        stroke: rgba(251, 191, 36, 0.95);
+        stroke-width: 2;
+      }
+      .paperMeta {
+        min-width: 0;
+      }
+      .paperMeta h3 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 1000;
+        letter-spacing: -0.01em;
+        color: #0f172a;
+      }
+      .paperMeta .authors {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 6px;
+        line-height: 1.5;
+      }
+      .badgeRow {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .miniBadge {
+        font-size: 10px;
+        font-weight: 950;
+        color: rgba(15, 23, 42, 0.92);
+        border: 1px solid rgba(2, 6, 23, 0.10);
+        background: rgba(2, 6, 23, 0.03);
+        padding: 4px 8px;
+        border-radius: 999px;
+      }
+      details.absDetails {
+        border: 1px solid rgba(226, 232, 240, 0.95);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.86);
+        padding: 10px 12px;
+      }
+      details.absDetails > summary {
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 950;
+        color: #0f172a;
+        list-style: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      details.absDetails > summary::-webkit-details-marker {
+        display: none;
+      }
+      details.absDetails p {
+        margin: 8px 0 0;
+        font-size: 11px;
+        color: #334155;
+        line-height: 1.7;
+      }
+      .paperActions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .paperActions.single {
+        grid-template-columns: 1fr;
+      }
+      .linkBtn {
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border-radius: 12px;
+        padding: 10px 10px;
+        font-size: 11px;
+        font-weight: 950;
+        border: 1px solid rgba(251, 191, 36, 0.30);
+        background: rgba(251, 191, 36, 0.10);
+        color: #0f172a;
+        transition: filter 140ms ease, transform 140ms ease;
+      }
+      .linkBtn:hover {
+        filter: brightness(1.06);
+        transform: translateY(-1px);
+      }
+      .linkBtn.secondary {
+        border-color: rgba(2, 6, 23, 0.14);
+        background: rgba(2, 6, 23, 0.03);
+        color: #0f172a;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      th,
+      td {
+        border-bottom: 1px solid var(--border);
+        padding: 8px 10px;
+        text-align: left;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 900;
+        font-size: 11px;
+      }
+
+      /* Leaflet tooltip tweak for clean look */
+      .leaflet-tooltip {
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        border-radius: 10px;
+        padding: 6px 8px;
+        box-shadow: 0 12px 26px rgba(2, 8, 23, 0.12);
+        background: rgba(255, 255, 255, 0.95);
+        color: #0f172a;
+        font-weight: 700;
+      }
+
+      @media (max-width: 1080px) {
+        .dash {
+          flex-direction: column;
+        }
+        .panelCol {
+          min-width: 0;
+        }
+        .chartsGrid,
+        .paperGrid,
+        .simGrid,
+        .simChartRow {
+          grid-template-columns: 1fr;
+        }
+        .hero {
+          grid-template-columns: 1fr;
+        }
+        .featureGrid {
+          grid-template-columns: 1fr;
+        }
+        .topnav .right {
+          display: none;
+        }
+        .coverInner {
+          grid-template-columns: 1fr;
+          padding: 22px;
+        }
+        .coverTitle {
+          font-size: 44px;
+        }
+        .coverSub {
+          font-size: 18px;
+        }
+        .coverBtn {
+          font-size: 18px;
+        }
+        .coverFooter {
+          font-size: 12px;
+          padding: 14px 22px 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <main class="main">
+        <header class="topnav">
+          <div class="left">
+            <div class="logoMark" aria-hidden="true"></div>
+            <div class="brandBlock">
+              <div class="kicker">RUC · SHENZHEN · SMARTCHARGE</div>
+              <div class="sub">充电站动态定价与运营辅助决策系统</div>
+            </div>
+          </div>
+
+          <nav class="tabs" aria-label="主导航">
+            <a href="#/home" data-route="/home" class="active">Home</a>
+            <a href="#/dashboard" data-route="/dashboard">Dashboard</a>
+            <a href="#/stations" data-route="/stations">站点信息</a>
+            <a href="#/simulator" data-route="/simulator">定价模拟</a>
+            <a href="#/analytics" data-route="/analytics">Analytics</a>
+            <a href="#/resources" data-route="/resources">Resources</a>
+          </nav>
+
+          <div class="right">
+            <div class="chip">
+              <span class="dot" aria-hidden="true"></span>
+              <span>RUC · Shenzhen · EV SmartCharge</span>
+            </div>
+          </div>
+        </header>
+
+        <div class="content">
+          <div class="frame">
+            <!-- PAGE: Home -->
+            <section id="page-home" class="page active">
+              <div class="homeWrap">
+                <div class="cover">
+                  <div class="coverInner">
+                    <div class="coverText">
+                      <div class="coverBadge animIn">
+                        <span class="dot" aria-hidden="true"></span>
+                        双碳目标 · 深圳充电大数据 · 空间杜宾模型（IV-SDM）
+                      </div>
+
+                      <h2 class="coverTitle animIn delay1">
+                        <span class="em">深圳充电桩</span><br />
+                        最优充电策略
+                      </h2>
+
+                      <div class="coverSub animIn delay2">一区一策｜一时一价｜定价优化与运营辅助决策</div>
+
+                      <p class="coverDesc animIn delay3">
+                        基于 UrbanEV 数据集的“区域×小时”面板数据（275 个充电站区域，2022/09/01—2023/02/28，共 4344 小时），
+                        识别生活服务区、餐饮服务区、商务与住宅区的潮汐特征、价格弹性与空间溢出关系，并据此生成可落地的分时定价表与收益对比。
+                      </p>
+
+                      <div class="coverActions animIn delay4">
+                        <a class="coverBtn" href="#/dashboard">查看完整策略</a>
+                        <a class="coverLink" href="#/analytics">模型洞察</a>
+                        <a class="coverLink" href="#/resources">研究支持</a>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="coverFooter">
+                    <div style="opacity: 0.60">© 深圳超充之城 · 绿色出行方案</div>
+                    <div class="ipMark" title="深圳超充 IP">
+                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M12 2l8.5 6v8L12 22 3.5 16V8L12 2Z" stroke="rgba(248,248,248,0.85)" stroke-width="1.6"/>
+                        <path d="M13.2 6.5 9.8 13h3.3l-2.2 4.6 5-6.8h-3.2l1.5-4.3Z" fill="rgba(52,211,153,0.85)"/>
+                      </svg>
+                      深圳超充
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- PAGE: Dashboard -->
+            <section id="page-dashboard" class="page dashboardFill">
+              <div class="dash">
+                <div class="mapCol">
+                  <div class="sectionHeader">
+                    <div class="title">深圳市 · 充电站空间分布</div>
+                    <div>缩放/平移 · Hover 名称 · 点击看详情</div>
+                  </div>
+                  <div id="map"></div>
+                </div>
+
+                <div class="panelCol">
+                  <div class="sectionHeader">
+                    <div class="title">决策分析面板 · 定价模拟器</div>
+                    <div id="panelMode">全局统计</div>
+                  </div>
+
+                  <div class="panelBody">
+                    <div class="card">
+                      <div class="cardTitle">深圳市全局概览（实证）</div>
+                      <div class="stats">
+                        <div class="stat">
+                          <div class="label">充电站区域数</div>
+                          <div class="value vBrand" id="stat-total">275</div>
+                        </div>
+                        <div class="stat">
+                          <div class="label">样本时长</div>
+                          <div class="value vAcc" id="stat-util">4344 h</div>
+                        </div>
+                        <div class="stat">
+                          <div class="label">价格区间（均值）</div>
+                          <div class="value vHot" id="stat-hot">1.642–1.709</div>
+                        </div>
+                      </div>
+                      <div class="hint" style="margin-top: 10px">
+                        功能区类型：<strong style="color: var(--poi-biz)">商务与住宅</strong>、
+                        <strong style="color: var(--poi-food)">餐饮服务</strong>、
+                        <strong style="color: var(--poi-life)">生活服务</strong>。
+                      </div>
+                    </div>
+
+                    <div class="card" id="stationJumpCard">
+                      <div class="cardTitle">站点详情入口</div>
+                      <div class="hint">
+                        站点信息已迁移至“站点信息”页面。点击地图上的任一站点，将自动跳转并展示站点详情。
+                      </div>
+                      <div class="btnRow" style="margin-top: 12px">
+                        <a class="btn" href="#/stations" style="text-align:center">前往站点信息页</a>
+                        <a class="btn" href="#/simulator" style="text-align:center">进入定价模拟器</a>
+                      </div>
+                    </div>
+
+                    <div class="card">
+                      <div class="cardTitle">操作指引与交互说明</div>
+                      <div class="hint" style="margin-bottom: 8px">你可以在地图与功能页进行以下操作：</div>
+                      <ul style="margin:0; padding-left:18px; color:#475569; font-size:12px; line-height:1.8;">
+                        <li><strong>点击地图站点</strong>：自动跳转到站点信息页，并加载该区域价格、热力图、占用率与充电量。</li>
+                        <li><strong>Hover 站点</strong>：查看站点编号与所属区域，快速识别站点位置。</li>
+                        <li><strong>进入定价模拟器</strong>：可按站点或功能区进行“一区一策”动态定价推演。</li>
+                        <li><strong>切换工作日/休息日与天气</strong>：实时查看利润增幅、利用率提升和策略标签变化。</li>
+                        <li><strong>导出策略表</strong>：在定价模拟页可导出分时定价结果（Excel/CSV）用于汇报与落地执行。</li>
+                      </ul>
+                      <div class="hint" style="margin-top:10px;">提示：右上角导航可在 Dashboard、站点信息、定价模拟与研究分析之间快速切换。</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- PAGE: Stations -->
+            <section id="page-stations" class="page scrollable">
+              <div class="grid2">
+                <div class="headerCard">
+                  <div>
+                    <div class="h">站点信息检索与详情</div>
+                    <div>输入站点号或从地图点击跳转查看详细信息</div>
+                  </div>
+                  <div id="stationContext">当前站点：未选择</div>
+                </div>
+
+                <div class="stationSummaryGrid">
+                  <div class="chartCard stationCard" style="margin-bottom: 8px; height: 100px;">
+                    <div class="t">
+                      <div class="name">站点检索</div>
+                      <div class="note">支持站点号快速定位</div>
+                    </div>
+                    <div class="chartFlex" style="flex: 0 0 auto;">
+                      <div class="card" style="height: auto; padding-bottom: 10px;">
+                        <div class="controls">
+                          <div class="control">
+                            <label>
+                              <span>站点号搜索</span>
+                              <span class="miniNote">示例：102</span>
+                            </label>
+                            <div style="display:flex; gap:10px; align-items:stretch; height:32px;">
+                              <input id="stationSearch" type="text" placeholder="输入区域ID(TAZID)或站点编号" style="flex:1; height:32px; border-radius:10px; border:1px solid rgba(226,232,240,0.9); padding:0 10px; box-sizing:border-box;" />
+                              <button class="btn" id="btn-station-search" style="white-space:nowrap; height:32px; padding:0 14px; line-height:32px;">查询</button>
+                            </div>
+                          </div>
+                          <div class="hint" id="stationSearchHint" style="margin-top:6px">可输入区域ID(TAZID)或站点编号，或在地图点击站点后自动跳转到此页。</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="chartCard stationCard">
+                    <div class="t">
+                      <div class="name">站点详情</div>
+                      <div class="note">站点信息与价格视图</div>
+                    </div>
+                    <div class="chartFlex" style="flex:0 0 auto;">
+                      <div class="card" style="height: auto;">
+                        <div class="row2" style="margin-bottom: 10px">
+                          <div class="kv">
+                            <div class="k">站点</div>
+                            <div class="v" id="d-name">-</div>
+                          </div>
+                          <div class="kv">
+                            <div class="k">POI 类别</div>
+                            <div class="v" id="d-poi">-</div>
+                          </div>
+                          <div class="kv">
+                            <div class="k">经纬度</div>
+                            <div class="v" id="d-ll">-</div>
+                          </div>
+                          <div class="kv">
+                            <div class="k">充电桩数量</div>
+                            <div class="v" id="d-count">-</div>
+                          </div>
+                          <div class="kv">
+                            <div class="k">区域面积</div>
+                            <div class="v" id="d-area">-</div>
+                          </div>
+                          <div class="kv">
+                            <div class="k">需求得分</div>
+                            <div class="v" id="d-score">-</div>
+                          </div>
+                        </div>
+                        <div class="priceRow">
+                          <div>
+                            <div class="hint" style="margin-bottom: 6px">电价/服务费 · 24 小时平均</div>
+                            <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap">
+                              <select id="avgYear" style="height:30px; border-radius:10px; border:1px solid rgba(226,232,240,0.9); padding:0 10px;"></select>
+                              <select id="avgMonth" style="height:30px; border-radius:10px; border:1px solid rgba(226,232,240,0.9); padding:0 10px;"></select>
+                            </div>
+                            <div id="priceLine" class="chart chartMedium"></div>
+                          </div>
+                          <div>
+                            <div class="hint" style="margin-bottom: 6px">电价 / 服务费 日度曲线</div>
+                            <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap">
+                              <select id="priceYear" style="height:30px; border-radius:10px; border:1px solid rgba(226,232,240,0.9); padding:0 10px;"></select>
+                              <select id="priceMonth" style="height:30px; border-radius:10px; border:1px solid rgba(226,232,240,0.9); padding:0 10px;"></select>
+                              <select id="priceDay" style="height:30px; border-radius:10px; border:1px solid rgba(226,232,240,0.9); padding:0 10px;"></select>
+                              <select id="priceKind" style="height:30px; border-radius:10px; border:1px solid rgba(226,232,240,0.9); padding:0 10px;">
+                                <option value="e_price">电价</option>
+                                <option value="s_price">服务费</option>
+                              </select>
+                            </div>
+                            <div id="dailyLine" class="chart chartMedium"></div>
+                          </div>
+                        </div>
+                        <div class="hint" style="margin: 10px 0 6px">电价 / 服务费 热力图（日期 × 小时）</div>
+                        <div id="priceHeat" class="chart chartHeat"></div>
+                        <div class="hint" style="margin: 12px 0 6px">占用率 / 充电量 · 月均 24 小时</div>
+                        <div class="priceRow">
+                          <div>
+                            <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap">
+                              <select id="flowYear" style="height:30px; border-radius:10px; border:1px solid rgba(226,232,240,0.9); padding:0 10px;"></select>
+                              <select id="flowMonth" style="height:30px; border-radius:10px; border:1px solid rgba(226,232,240,0.9); padding:0 10px;"></select>
+                            </div>
+                            <div id="occupancyLine" class="chart chartMedium"></div>
+                          </div>
+                          <div>
+                            <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap">
+                              <select id="volumeYear" style="height:30px; border-radius:10px; border:1px solid rgba(226,232,240,0.9); padding:0 10px;"></select>
+                              <select id="volumeMonth" style="height:30px; border-radius:10px; border:1px solid rgba(226,232,240,0.9); padding:0 10px;"></select>
+                            </div>
+                            <div id="volumeLine" class="chart chartMedium"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </section>
+
+            <!-- PAGE: Simulator -->
+            <section id="page-simulator" class="page scrollable">
+              <div class="grid2">
+                <div class="headerCard">
+                  <div>
+                    <div class="h">“一区一策”动态定价模拟器</div>
+                    <div>面向运营商与规划部门的定价与收益测算沙盘</div>
+                  </div>
+                  <div>点击地图站点或选择功能区，即时生成定价建议与收益测算</div>
+                </div>
+
+                <section class="simulatorSection">
+                  <div class="simHeader">
+                    <div>
+                      <div class="simTitle">动态定价与收益测算</div>
+                      <div class="simNote">支持站点与功能区双模式选择</div>
+                    </div>
+                    <div class="simHint">近一月均价 vs 优化价格 · 利润/占用率对比 · 策略表导出</div>
+                  </div>
+
+                  <div class="simGrid">
+                    <div class="simPanel">
+                      <div class="simBlock">
+                        <div class="simBlockTitle">选址与情景设定</div>
+                        <div class="control">
+                          <label>
+                            <span>站点选择</span>
+                          </label>
+                          <select id="simStation" style="height:32px; border-radius:10px; border:1px solid rgba(226,232,240,0.9); padding:0 10px; width:100%">
+                            <option value="">自动跟随地图选中</option>
+                          </select>
+                        </div>
+                        <div class="control">
+                          <label>
+                            <span>功能区类型</span>
+                          </label>
+                          <select id="simCategory" style="height:32px; border-radius:10px; border:1px solid rgba(226,232,240,0.9); padding:0 10px; width:100%">
+                            <option value="Lifestyle Services">生活服务区</option>
+                            <option value="Food and Beverage Services">餐饮服务区</option>
+                            <option value="Business and Residential">商务与住宅区</option>
+                          </select>
+                        </div>
+                        <div class="control">
+                          <label>
+                            <span>基础服务费预期</span>
+                            <span><strong id="simBaseFeeValue">0.40</strong> 元/kWh</span>
+                          </label>
+                          <input id="simBaseFee" type="range" min="0.2" max="0.8" step="0.02" value="0.4" />
+                        </div>
+                        <div class="control">
+                          <label>
+                            <span>日期类型</span>
+                          </label>
+                          <div class="toggleRow">
+                            <button class="chipBtn active" data-sim-day="weekday">工作日</button>
+                            <button class="chipBtn" data-sim-day="weekend">休息日</button>
+                          </div>
+                        </div>
+                        <div class="control">
+                          <label>
+                            <span>天气场景</span>
+                          </label>
+                          <div class="toggleRow">
+                            <button class="chipBtn active" data-sim-weather="sunny">晴天</button>
+                            <button class="chipBtn" data-sim-weather="rain">降雨</button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="simBlock">
+                        <div class="simBlockTitle">动态测算结果</div>
+                        <div class="metricGrid">
+                          <div class="metricCard">
+                            <div class="metricLabel">预计利用率提升</div>
+                            <div class="metricValue" id="simOcc">+15.16%</div>
+                            <div class="metricDesc">反映优化定价对充电桩有效工作时长的提升幅度。</div>
+                          </div>
+                          <div class="metricCard">
+                            <div class="metricLabel">预计利润增幅</div>
+                            <div class="metricValue" id="simProfit">+135.79%</div>
+                            <div class="metricDesc">以最近一个月均价作为基准，模拟优化后 24 小时日利润变化。</div>
+                          </div>
+                          <div class="metricCard">
+                            <div class="metricLabel">策略建议</div>
+                            <div class="metricValue" id="simStrategy">薄利多销</div>
+                            <div class="metricDesc">输出薄利多销、阶梯定价或保持高单价的运营标签。</div>
+                          </div>
+                        </div>
+                        <div class="simExplain">
+                          <div>利用率提升：基于最近一个月的占用率均值与情景调整后的提升幅度。</div>
+                          <div>利润增幅：以最近一个月平均价格与占用率估算的日均利润变化。</div>
+                          <div>策略建议：包含薄利多销、阶梯定价、保持高单价三类标签。</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="simVisual">
+                      <div class="simChartHeader">
+                        <div class="simBlockTitle">价格对比与收益响应</div>
+                        <div class="simTiny">近一个月均值 vs 优化定价</div>
+                      </div>
+                      <div id="simPriceChart" class="chart chartHeat"></div>
+                      <div class="simChartRow">
+                        <div id="simOccChart" class="chart chartMedium"></div>
+                        <div id="simProfitChart" class="chart chartMedium"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="simTableBlock">
+                    <div class="simBlockTitle">优化定价策略表（可导出）</div>
+                    <div class="tableWrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>时段</th>
+                            <th>推荐服务费</th>
+                            <th>定价标签</th>
+                            <th>解释</th>
+                          </tr>
+                        </thead>
+                        <tbody id="simTableBody"></tbody>
+                      </table>
+                    </div>
+                    <div class="btnRow" style="margin-top: 10px">
+                      <button class="btn" id="simExport">导出 Excel</button>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </section>
+
+            <!-- PAGE: Analytics -->
+            <section id="page-analytics" class="page scrollable">
+              <div class="grid2">
+                <div class="headerCard">
+                  <div>
+                    <div class="h">研究成果 · 实证分析</div>
+                    <div>“双碳”目标下充电基础设施需求特征与分时定价策略</div>
+                  </div>
+                  <div>深圳市公共充电数据（2022/09—2023/02）</div>
+                </div>
+
+                <article class="paperArticle">
+                  <section class="paperSection">
+                    <p class="paperParagraph">本研究利用深圳市真实的充电大数据，按照城市功能区划分类别，深入探究了充电需求的时空潮汐特征，并首创性地提出了一套“一区一策、一时一价”的精细化定价方案，旨在利用经济杠杆破解充电难、盈利难的行业痛点 。</p>
+                  </section>
+
+                  <section class="paperSection">
+                    <h3>📍 核心洞察一：城市功能区的异质性需求与潮汐规律</h3>
+                    <p class="paperParagraph">通过对深圳市 275 个充电站区域（覆盖生活服务区、餐饮服务区、商务与住宅区）的连续追踪，我们发现公共充电设施的布局与需求呈现出显著的空间非均衡性与时间周期性 。</p>
+                    <p class="paperParagraph">●需求潮汐结构： 城市充电需求在 20:00 到次日 6:00 之间维持高位（夜间集中充电与占位）；而在 8:00-11:00 及 15:00-16:00 的工作时段处于低谷，仅在 12:00-14:00 午休期出现短暂回升 。</p>
+                    <p class="paperParagraph">●价格敏感度分化： 空间杜宾模型（SDM）揭示，生活服务区与餐饮服务区表现出极高的价格敏感性（价格弹性分别达到 -5.60 和 -6.08），这表明用户在休闲消费时段的补电极具随机性；相反，商务与住宅区的价格弹性显著较低（-2.34），具有极强的“刚需”属性 。</p>
+                    <div class="paperGrid">
+                      <div class="paperFigure">
+                        <div class="cap">图3-1 深圳市公共电动汽车充电桩的空间分布</div>
+                        <img src="./pic/3-1.png" alt="图3-1" />
+                      </div>
+                      <div class="paperFigure">
+                        <div class="cap">图4-2 各功能区域充电需求敏感异质性分析雷达图</div>
+                        <img src="./pic/4-2.png" alt="图4-2" />
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="paperSection">
+                    <h3>🌐 核心洞察二：充电站间的空间博弈与竞争溢出</h3>
+                    <p class="paperParagraph">在高密度的城市充电网络中，站点并非孤立运行，理性的消费者会评估时间与价格成本，向具有替代性的邻近站点转移 。</p>
+                    <p class="paperParagraph">●激烈的替代竞争： 商务住宅区和生活服务区的周边充电桩分布密集，存在显著的正向空间溢出效应（间接效应分别为 0.237 和 0.205）。这意味着邻近站点的涨价会直接驱动用户流向本地，距离越近，替代效应越强 。</p>
+                    <p class="paperParagraph">●高转移壁垒的孤岛： 餐饮服务区（如大型商圈）周边多为交通拥堵路段，转移成本较高，导致其空间溢出效应极弱（接近于零），削弱了相邻区域的竞争威胁 。</p>
+                    <div class="paperFigure">
+                      <div class="cap">图4-1 深圳市充电站区域分类空间密度分析图</div>
+                      <img src="./pic/4-1.png" alt="图4-1" />
+                    </div>
+                  </section>
+
+                  <section class="paperSection">
+                    <h3>⚡ 核心洞察三：动态定价优化与多方共赢</h3>
+                    <p class="paperParagraph">为打破高维求解与高频价格波动的落地瓶颈，本研究引入时间序列 K-Means 聚类，将 24 小时动态压缩为 4 个特征连续的代表性时间簇，进而构建了收益最大化的非线性规划模型 。</p>
+                    <p class="paperParagraph">实施“一区一策、一时一价”的优化策略后，实现了微观供需的精准匹配：</p>
+                    <p class="paperParagraph">●薄利多销激活潜在需求： 生活服务区通过利用高价格弹性，实现利润激增 233.63%，设备利用率提高 9.07% 。</p>
+                    <p class="paperParagraph">●阶梯定价捕捉峰值流量： 餐饮服务区利润大幅提升 135.79% 。</p>
+                    <p class="paperParagraph">●高单价呼应低弹性： 商务与住宅区在保持价格平稳的基础上，利润稳步增长 9.52%，占用率大幅提升 15.16%，成功捕获刚需人群的超额收益 。</p>
+                    <div class="paperGrid">
+                      <div class="paperFigure">
+                        <div class="cap">图5-2 三类功能属性充电站区域定价分段可视化</div>
+                        <img src="./pic/5-2.png" alt="图5-2" />
+                      </div>
+                      <div class="paperFigure">
+                        <div class="cap">图5-6 优化后各功能区各时段平均服务费</div>
+                        <img src="./pic/5-6.png" alt="图5-6" />
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="paperSection">
+                    <h3>⛈️ 核心洞察四：环境扰动与系统的抗风险韧性</h3>
+                    <p class="paperParagraph">物理环境与时间属性的短期冲击，会重塑车主的决策逻辑与系统收益结构。</p>
+                    <p class="paperParagraph">●节假日效应（时间重塑）： 休息日用户的搜寻时间充裕，整体价格敏感度显著上升。餐饮服务区的非工作日弹性较工作日增加了 9.40%，商务与住宅区弹性增幅更达 13.15%。需求从刚性的通勤碎片化充电，成功向休闲整段式充电转移 。</p>
+                    <p class="paperParagraph">●极端天气（空间锁定）： 降雨显著增加了移动边际成本，导致用户对价格的追求让位于对距离的妥协（削弱了价格敏感度） 。极端降雨使餐饮与生活区需求锐减（利润缩水约 50%），但商务与住宅区却展现出极强的反周期性，利润与占用率在雨天呈现递增态势，成为了全天候的稳定器 。</p>
+                    <div class="paperGrid">
+                      <div class="paperFigure">
+                        <div class="cap">图6-1 工作日与周末价格弹性变动</div>
+                        <img src="./pic/6-1.png" alt="图6-1" />
+                      </div>
+                      <div class="paperFigure">
+                        <div class="cap">图6-4 降雨量变化下总利润与占用率对比</div>
+                        <img src="./pic/6-4.png" alt="图6-4" />
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="paperSection">
+                    <h3>💡 政策与行业建议</h3>
+                    <p class="paperParagraph">1.对于充电运营商： 摒弃静态定价，在刚需主导区（商务/住宅）利用高峰期锁定利润；在高弹性区（餐饮/生活）利用平谷时段主动下调服务费，抢占周边市场份额 。</p>
+                    <p class="paperParagraph">2.对于政府与监管部门： 给予运营商更包容的下浮定价空间，建立充电网络与微电网的联动机制，用经济杠杆缓解电网扩容的硬性压力 。</p>
+                    <p class="paperParagraph">3.对于城市规划部门： 引入空间计量工具评估建站拥挤度，引导社会资本避开高溢出效应的“价格战”红海，向刚需盲区倾斜，构建可持续的补能生态 。</p>
+                  </section>
+                </article>
+              </div>
+            </section>
+
+            <!-- PAGE: Resources -->
+            <section id="page-resources" class="page">
+              <div class="papers">
+                <div class="headerCard">
+                  <div>
+                    <div class="h">文献与研究支持</div>
+                    <div>论文、数据集与可复现实证材料（支持检索与筛选）</div>
+                  </div>
+                  <div>
+                    数据集：<a href="https://github.com/IntelligentSystemsLab/ST-EVCDP/tree/main/datasets" target="_blank" rel="noreferrer">ST-EVCDP</a>
+                  </div>
+                </div>
+                <div class="resToolbar">
+                  <div class="searchBox" role="search">
+                    <span style="font-size:12px; opacity:.7">⌕</span>
+                    <input id="paperSearch" type="text" placeholder="搜索标题 / 作者 / 关键词（SDM, 价格弹性, spillover...）" />
+                  </div>
+                  <div class="chipRow" id="paperFilters">
+                    <button class="chipBtn active" data-filter="all">全部</button>
+                    <button class="chipBtn" data-filter="our">我们的论文</button>
+                    <button class="chipBtn" data-filter="methods">方法与模型</button>
+                    <button class="chipBtn" data-filter="dataset">数据集</button>
+                    <button class="chipBtn" data-filter="pricing">定价与弹性</button>
+                  </div>
+                </div>
+                <div class="paperGrid" id="paperGrid"></div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+
+    <!-- Scripts -->
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <script src="./data/stations-data.js"></script>
+    <script src="./shp/shenzhen-boundary.js"></script>
+    <script src="./data/price-data.js"></script>
+    <script src="./data/flow-data.js"></script>
+
+    <script>
+      // ----------------------------
+      // Data
+      // ----------------------------
+      function getCssVar(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
+
+      const POI_COLORS = {
+        "商务与住宅": getCssVar("--poi-biz"),
+        "餐饮服务": getCssVar("--poi-food"),
+        "生活服务": getCssVar("--poi-life"),
+      };
+
+      const POI_MAP = {
+        "business and residential": "商务与住宅",
+        "lifestyle services": "生活服务",
+        "food and beverage": "餐饮服务",
+        "food and beverage services": "餐饮服务",
+      };
+
+      // 站点信息（从 stations-data.js 读取）
+      let stations = [];
+      let tazPoints = [];
+      let stationPoints = [];
+
+      const papers = [
+        {
+          id: "our-paper",
+          type: "our",
+          tags: ["IV-SDM", "动态定价", "空间溢出", "深圳"],
+          title: "研究成果",
+          authors: "孙炜杰｜李易安安｜王砺寒｜姚在桐",
+          abstract:
+            "基于深圳市真实充电大数据，按城市功能区（生活服务、餐饮服务、商务与住宅）刻画充电需求潮汐特征、价格敏感度差异与站点间空间博弈关系。通过带工具变量的空间杜宾模型识别空间异质性，并将估计参数嵌入非线性规划求解“一区一策、一时一价”的优化策略。结果显示：生活服务区与餐饮服务区利润分别提升 233.63% 与 135.79%，三类区域充电桩利用率分别提高 9.07%、0.07%、15.16%，并进一步讨论节假日、降雨等外生冲击下的策略调整。研究进一步给出深圳 275 个充电站点在 2022/09—2023/02 的“区域×小时”分时定价建议，形成可操作的分区分时电价表，并量化不同需求场景下的收益-拥堵权衡曲线，提供面向政府监管与运营商的可复现实证框架。",
+          sourceUrl: "#/analytics",
+          extraUrls: [],
+          localFile: "",
+        },
+        {
+          id: "baek-2024",
+          type: "dataset",
+          tags: ["数据集", "Charging sessions", "Scientific Data"],
+          title:
+            "A dataset for multi-faceted analysis of electric vehicle charging transactions",
+          authors: "Keon Baek｜Eunjung Lee｜Jinho Kim (Scientific Data, 2024)",
+          abstract:
+            "公开充电交易数据集：72,856 次会话、2,337 名用户、2,119 个充电桩，覆盖 2021-09-30 至 2022-09-30 的商业运营周期；可用于定价、选址与市场设计等研究。",
+          sourceUrl: "https://doi.org/10.1038/s41597-024-02942-9",
+          extraUrls: [
+            { label: "Figshare 数据", url: "https://doi.org/10.6084/m9.figshare.22495141.v1" },
+          ],
+          localFile:
+            "Baek et al. - 2024 - A dataset for multi-faceted analysis of electric vehicle charging transactions.pdf",
+        },
+        {
+          id: "chatev-2024",
+          type: "methods",
+          tags: ["LLM", "预测", "ST-EVCDP"],
+          title: "ChatEV: Predicting electric vehicle charging demand as natural language processing",
+          authors:
+            "Haohao Qu｜Han Li｜Linlin You｜Rui Zhu｜Jinyue Yan｜Paolo Santi｜Carlo Ratti｜Chau Yuen (TRD, 2024)",
+          abstract:
+            "提出将充电需求预测重写为 text-to-text，并用元学习对 LLM 进行对齐微调；在 ST-EVCDP 等真实数据上验证 few-shot/zero-shot 泛化能力，并讨论政策含义。",
+          sourceUrl: "https://doi.org/10.1016/j.trd.2024.104470",
+          extraUrls: [
+            { label: "ST-EVCDP 数据集", url: "https://github.com/IntelligentSystemsLab/ST-EVCDP/tree/main/datasets" },
+          ],
+          localFile: "ChatEV Predicting electric vehicle charging demand as natural language processing.pdf",
+        },
+        {
+          id: "kuang-price-2024",
+          type: "pricing",
+          tags: ["价格弹性", "spillover", "深圳"],
+          title:
+            "Unraveling the effect of electricity price on electric vehicle charging behavior: A case study in Shenzhen, China",
+          authors:
+            "Haoxuan Kuang｜Xinyu Zhang｜Haohao Qu｜Linlin You｜Rui Zhu｜Jun Li (Sustainable Cities and Society, 2024)",
+          abstract:
+            "在深圳城市级公共充电数据上量化价格弹性与空间溢出：平均弹性约 −0.7581；正/负价格冲击带来 89.48% / 53.88% 的邻域溢出比例，溢出半径约 3.45km，为分区分时定价提供证据。",
+          sourceUrl: "https://doi.org/10.1016/j.scs.2024.105836",
+          extraUrls: [
+            { label: "ST-EVCDP 数据集", url: "https://github.com/IntelligentSystemsLab/ST-EVCDP/tree/main/datasets" },
+          ],
+          localFile:
+            "Unravelling the effect of electricity price on electric vehicle charging behavior A case study in Shenzhen, China.pdf",
+        },
+      ];
+
+      // ----------------------------
+      // Router (hash)
+      // ----------------------------
+      const routes = ["/home", "/dashboard", "/stations", "/simulator", "/analytics", "/resources"];
+      function setRoute(route) {
+        const r = routes.includes(route) ? route : "/home";
+        document.querySelectorAll("[data-route]").forEach((a) => {
+          a.classList.toggle("active", a.dataset.route === r);
+        });
+        document.getElementById("page-home").classList.toggle("active", r === "/home");
+        document.getElementById("page-dashboard").classList.toggle("active", r === "/dashboard");
+        document.getElementById("page-stations").classList.toggle("active", r === "/stations");
+        document.getElementById("page-simulator").classList.toggle("active", r === "/simulator");
+        document.getElementById("page-analytics").classList.toggle("active", r === "/analytics");
+        document.getElementById("page-resources").classList.toggle("active", r === "/resources");
+
+        // lazy init per-page + resize after visible
+        requestAnimationFrame(() => {
+          if (r === "/dashboard") ensureDashboardReady();
+          if (r === "/stations") ensureStationsReady();
+          if (r === "/simulator") ensureSimulatorReady();
+          if (r === "/analytics") ensureAnalyticsReady();
+          resizeAllCharts();
+        });
+      }
+
+      window.addEventListener("hashchange", () => {
+        const hash = location.hash.replace("#", "") || "/home";
+        setRoute(hash);
+      });
+
+      // ----------------------------
+      // Map (Leaflet)
+      // ----------------------------
+      let map;
+      let selectedStation = null;
+      let stationMarkers = [];
+
+      let dashboardReady = false;
+      let stationsReady = false;
+      let analyticsReady = false;
+      let simulatorReady = false;
+
+      function initMap() {
+        if (map) {
+          map.remove();
+        }
+        map = L.map("map", {
+          zoomControl: true,
+          preferCanvas: true,
+        }).setView([22.5431, 114.0579], 11);
+
+        if (stations.length) {
+          const bounds = L.latLngBounds(stations.map((s) => [s.lat, s.lng]));
+          map.fitBounds(bounds.pad(0.12));
+        }
+
+        if (typeof SHENZHEN_GEOJSON !== "undefined") {
+          console.log("Shenzhen boundary loaded", SHENZHEN_GEOJSON.features?.length || 0);
+        }
+
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "&copy; OpenStreetMap",
+        }).addTo(map);
+
+        // Shenzhen boundary (from shp/shenzhen_full.json)
+        if (typeof SHENZHEN_GEOJSON !== "undefined") {
+          L.geoJSON(SHENZHEN_GEOJSON, {
+            style: {
+              color: "rgba(15, 23, 42, 0.95)",
+              weight: 2,
+              fillColor: "rgba(15, 23, 42, 0.08)",
+              fillOpacity: 0.24,
+            },
+          }).addTo(map);
+        }
+
+        renderStations();
+      }
+
+      function renderStations() {
+        if (!map) return;
+        stationMarkers.forEach((m) => m.remove());
+        stationMarkers = [];
+
+        const points = [...stations, ...stationPoints.map((s) => ({
+          id: String(s.stationid || "").trim(),
+          lat: Number(s.lat),
+          lng: Number(s.lng),
+          poiCategory: s.poiCategory || POI_MAP[String(s.poiRaw || "").trim().toLowerCase()] || "商务与住宅",
+          isStation: true,
+          tazid: s.tazid,
+        }))];
+
+        // Render TAZ area circles first (low opacity)
+        stations.forEach((z) => {
+          if (!Number.isFinite(z.lat) || !Number.isFinite(z.lng)) return;
+          const color = POI_COLORS[z.poiCategory] || "#334155";
+          const area = Number(z.area || 0);
+          const radius = area > 0 ? Math.sqrt(area / Math.PI) : 800;
+          const circle = L.circle([z.lat, z.lng], {
+            radius: Math.min(Math.max(radius, 500), 2500),
+            color: color,
+            weight: 1,
+            fillColor: color,
+            fillOpacity: 0.12,
+          }).addTo(map);
+          stationMarkers.push(circle);
+        });
+
+        points.forEach((s) => {
+          if (!Number.isFinite(s.lat) || !Number.isFinite(s.lng)) return;
+          const color = POI_COLORS[s.poiCategory] || "#334155";
+          const marker = L.circleMarker([s.lat, s.lng], {
+            radius: s.isStation ? 4 : 7,
+            color: color,
+            weight: 2,
+            fillColor: color,
+            fillOpacity: s.isStation ? 0.7 : 0.9,
+          })
+            .addTo(map)
+            .bindTooltip(s.isStation ? `站点 ${s.id}（区 ${s.tazid}）` : `区 ${s.id}`, {
+              direction: "top",
+              offset: [0, -6],
+              opacity: 0.95,
+            })
+            .on("click", () => {
+              const target = s.isStation ? stations.find((z) => z.id === String(s.tazid)) : s;
+              if (target) {
+                selectStation(target, { silent: true });
+                if (simUI.station()) simUI.station().value = target.id;
+                updateSimulatorFromStation();
+                location.hash = "#/stations";
+              }
+            });
+
+          stationMarkers.push(marker);
+        });
+
+        if (points.length) {
+          const bounds = L.latLngBounds(points.map((s) => [s.lat, s.lng]));
+          map.fitBounds(bounds.pad(0.12));
+        }
+      }
+
+      // ----------------------------
+      // Charts (ECharts)
+      // ----------------------------
+      let priceLineChart, dailyLineChart, priceHeatChart, occupancyLineChart, volumeLineChart, compareBarChart, tidalLineChart, spillGraphChart;
+      let simPriceChart, simOccChart, simProfitChart;
+
+      function initChartsDashboard() {
+        const barEl = document.getElementById("barCompare");
+        if (!barEl) return;
+        compareBarChart = echarts.init(barEl);
+        setCompareBarOption({ current: 100, optimized: 112 });
+      }
+
+      function initChartsStations() {
+        const priceEl = document.getElementById("priceLine");
+        const dailyEl = document.getElementById("dailyLine");
+        const heatEl = document.getElementById("priceHeat");
+        const occupancyEl = document.getElementById("occupancyLine");
+        const volumeEl = document.getElementById("volumeLine");
+        if (!priceEl || !dailyEl || !heatEl || !occupancyEl || !volumeEl) return;
+
+        priceLineChart = echarts.init(priceEl);
+        dailyLineChart = echarts.init(dailyEl);
+        priceHeatChart = echarts.init(heatEl);
+        occupancyLineChart = echarts.init(occupancyEl);
+        volumeLineChart = echarts.init(volumeEl);
+        setPriceCharts(null);
+      }
+
+      function initStationsData() {
+        tazPoints = Array.isArray(typeof TAZ_POINTS !== "undefined" ? TAZ_POINTS : []) ? TAZ_POINTS : [];
+        stationPoints = Array.isArray(typeof STATION_POINTS !== "undefined" ? STATION_POINTS : []) ? STATION_POINTS : [];
+
+        stations = tazPoints.map((s) => ({
+          id: String(s.tazid || "").trim(),
+          name: `区域 ${s.tazid}`,
+          lat: Number(s.lat),
+          lng: Number(s.lng),
+          poiCategory: s.poiCategory || POI_MAP[String(s.poiRaw || "").trim().toLowerCase()] || "商务与住宅",
+          poiRaw: s.poiRaw,
+          chargeCount: Number(s.chargeCount || 0),
+          area: Number(s.area || 0),
+          perimeter: Number(s.perimeter || 0),
+          demandScore: Math.min(0.95, Math.max(0.4, 0.55 + Number(s.chargeCount || 0) / 60)),
+          basePrice: 1.6 + (Number(s.chargeCount || 0) % 8) * 0.02,
+        }));
+
+        if (ui.stationSearchHint()) {
+          ui.stationSearchHint().textContent = `已加载区域 ${stations.length} 个，站点 ${stationPoints.length} 个。`;
+        }
+
+        if (!stations.length) {
+          console.warn("Stations data empty. Check data/stations-data.js loaded.");
+        } else {
+          console.info(`Stations loaded: ${stations.length} zones, ${stationPoints.length} stations`);
+        }
+
+        return Promise.resolve(stations);
+      }
+
+      // 旧 CSV 解析逻辑已改为内联数据，不再使用
+
+      function initChartsAnalytics() {
+        const priceEl = document.getElementById("simPriceChart");
+        const occEl = document.getElementById("simOccChart");
+        const profitEl = document.getElementById("simProfitChart");
+        if (!priceEl || !occEl || !profitEl) return;
+        simPriceChart = echarts.init(priceEl);
+        simOccChart = echarts.init(occEl);
+        simProfitChart = echarts.init(profitEl);
+      }
+
+      function resizeAllCharts() {
+        [priceLineChart, dailyLineChart, priceHeatChart, occupancyLineChart, volumeLineChart, simPriceChart, simOccChart, simProfitChart].forEach((c) => {
+          if (c && !c.isDisposed()) c.resize();
+        });
+      }
+
+      function ensureSimulatorReady() {
+        if (!simulatorReady) {
+          initChartsAnalytics();
+          initSimulator();
+          simulatorReady = true;
+        }
+      }
+
+      function setPriceCharts(station) {
+        if (!priceLineChart || !dailyLineChart || !priceHeatChart) return;
+
+        const tazid = station?.id;
+        const price = typeof PRICE_DATA !== "undefined" ? PRICE_DATA : null;
+        if (!price || !tazid || !price.e_price?.[tazid] || !price.s_price?.[tazid]) {
+          priceLineChart.clear();
+          dailyLineChart.clear();
+          priceHeatChart.clear();
+          return;
+        }
+
+        const e = price.e_price[tazid];
+        const s = price.s_price[tazid];
+        const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+
+        const metaMonths = price.meta?.months || [];
+        const avgYear = document.getElementById("avgYear");
+        const avgMonth = document.getElementById("avgMonth");
+        const groupedMonths = {};
+        metaMonths.forEach((m) => {
+          const [y, mo] = m.split("-");
+          if (!groupedMonths[y]) groupedMonths[y] = [];
+          groupedMonths[y].push(mo);
+        });
+
+        const avgYears = Object.keys(groupedMonths);
+        if (avgYear && avgYear.options.length !== avgYears.length) {
+          avgYear.innerHTML = avgYears.map((y) => `<option value="${y}">${y}</option>`).join("");
+          avgYear.value = avgYears[avgYears.length - 1] || "";
+        }
+
+        const currentAvgYear = avgYear?.value || avgYears[0];
+        const avgMonths = currentAvgYear ? groupedMonths[currentAvgYear] || [] : [];
+        if (avgMonth && avgMonth.options.length !== avgMonths.length) {
+          avgMonth.innerHTML = avgMonths.map((m) => `<option value="${m}">${m}</option>`).join("");
+          avgMonth.value = avgMonths[avgMonths.length - 1] || "";
+        }
+
+        const currentAvgMonth = avgMonth?.value || avgMonths[0];
+        const avgKey = currentAvgYear && currentAvgMonth ? `${currentAvgYear}-${currentAvgMonth}` : metaMonths[metaMonths.length - 1];
+        const eAvgSeries = e.monthly_hourly_avg?.[avgKey] || e.hourly_avg;
+        const sAvgSeries = s.monthly_hourly_avg?.[avgKey] || s.hourly_avg;
+
+        priceLineChart.setOption({
+          grid: { left: 40, right: 12, top: 10, bottom: 26 },
+          tooltip: { trigger: "axis" },
+          legend: { data: ["电价", "服务费"], textStyle: { color: "#334155", fontSize: 10 } },
+          xAxis: {
+            type: "category",
+            data: hours,
+            axisTick: { show: false },
+            axisLine: { lineStyle: { color: "#cbd5e1" } },
+            axisLabel: { color: "#64748b", fontSize: 10 },
+          },
+          yAxis: {
+            type: "value",
+            splitLine: { lineStyle: { color: "rgba(148,163,184,0.35)" } },
+            axisLabel: { color: "#64748b", fontSize: 10 },
+          },
+          series: [
+            {
+              name: "电价",
+              type: "line",
+              smooth: true,
+              data: eAvgSeries.map((v) => +Number(v).toFixed(3)),
+              lineStyle: { width: 2, color: "#2563eb" },
+              itemStyle: { color: "#2563eb" },
+            },
+            {
+              name: "服务费",
+              type: "line",
+              smooth: true,
+              data: sAvgSeries.map((v) => +Number(v).toFixed(3)),
+              lineStyle: { width: 2, color: "#f97316" },
+              itemStyle: { color: "#f97316" },
+            },
+          ],
+        });
+
+        const days = price.meta?.days || [];
+        const yearSelect = document.getElementById("priceYear");
+        const monthSelect = document.getElementById("priceMonth");
+        const daySelect = document.getElementById("priceDay");
+
+        const flow = typeof FLOW_DATA !== "undefined" ? FLOW_DATA : null;
+
+        const grouped = {};
+        days.forEach((d) => {
+          const [y, m, day] = d.split("-");
+          if (!grouped[y]) grouped[y] = {};
+          if (!grouped[y][m]) grouped[y][m] = [];
+          grouped[y][m].push(day);
+        });
+
+        const years = Object.keys(grouped);
+        if (yearSelect && yearSelect.options.length !== years.length) {
+          yearSelect.innerHTML = years.map((y) => `<option value="${y}">${y}</option>`).join("");
+          yearSelect.value = years[years.length - 1] || "";
+        }
+
+        const currentYear = yearSelect?.value || years[0];
+        const months = currentYear ? Object.keys(grouped[currentYear] || {}) : [];
+        if (monthSelect && monthSelect.options.length !== months.length) {
+          monthSelect.innerHTML = months.map((m) => `<option value="${m}">${m}</option>`).join("");
+          monthSelect.value = months[months.length - 1] || "";
+        }
+
+        const currentMonth = monthSelect?.value || months[0];
+        const daysInMonth = currentYear && currentMonth ? grouped[currentYear][currentMonth] || [] : [];
+        if (daySelect && daySelect.options.length !== daysInMonth.length) {
+          daySelect.innerHTML = daysInMonth.map((d) => `<option value="${d}">${d}</option>`).join("");
+          daySelect.value = daysInMonth[daysInMonth.length - 1] || "";
+        }
+
+        const selectedDay = daySelect?.value || daysInMonth[daysInMonth.length - 1];
+        const dayKey = selectedDay ? `${currentYear}-${currentMonth}-${selectedDay}` : days[days.length - 1];
+        const dayIndex = Math.max(0, days.indexOf(dayKey));
+
+        const kindSelect = document.getElementById("priceKind");
+        const kind = kindSelect?.value || "e_price";
+        const dataByKind = kind === "e_price" ? e : s;
+        const heatMatrix = dataByKind?.heatmap?.values || [];
+        const daily = heatMatrix[dayIndex] || [];
+
+        if (flow && tazid) {
+          const occ = flow.occupancy?.[tazid];
+          const vol = flow.volume?.[tazid];
+          const flowMonths = flow.meta?.months || [];
+          const occYear = document.getElementById("flowYear");
+          const occMonth = document.getElementById("flowMonth");
+          const volYear = document.getElementById("volumeYear");
+          const volMonth = document.getElementById("volumeMonth");
+
+          const flowGrouped = {};
+          flowMonths.forEach((m) => {
+            const [y, mo] = m.split("-");
+            if (!flowGrouped[y]) flowGrouped[y] = [];
+            flowGrouped[y].push(mo);
+          });
+          const flowYears = Object.keys(flowGrouped);
+
+          if (occYear && occYear.options.length !== flowYears.length) {
+            occYear.innerHTML = flowYears.map((y) => `<option value="${y}">${y}</option>`).join("");
+            occYear.value = flowYears[flowYears.length - 1] || "";
+          }
+          const occCurrentYear = occYear?.value || flowYears[0];
+          const occMonths = occCurrentYear ? flowGrouped[occCurrentYear] || [] : [];
+          if (occMonth && occMonth.options.length !== occMonths.length) {
+            occMonth.innerHTML = occMonths.map((m) => `<option value="${m}">${m}</option>`).join("");
+            occMonth.value = occMonths[occMonths.length - 1] || "";
+          }
+          const occKey = occCurrentYear && occMonth?.value ? `${occCurrentYear}-${occMonth.value}` : flowMonths[flowMonths.length - 1];
+
+          if (volYear && volYear.options.length !== flowYears.length) {
+            volYear.innerHTML = flowYears.map((y) => `<option value="${y}">${y}</option>`).join("");
+            volYear.value = flowYears[flowYears.length - 1] || "";
+          }
+          const volCurrentYear = volYear?.value || flowYears[0];
+          const volMonths = volCurrentYear ? flowGrouped[volCurrentYear] || [] : [];
+          if (volMonth && volMonth.options.length !== volMonths.length) {
+            volMonth.innerHTML = volMonths.map((m) => `<option value="${m}">${m}</option>`).join("");
+            volMonth.value = volMonths[volMonths.length - 1] || "";
+          }
+          const volKey = volCurrentYear && volMonth?.value ? `${volCurrentYear}-${volMonth.value}` : flowMonths[flowMonths.length - 1];
+
+          const occSeries = occ?.monthly?.[occKey] || [];
+          const volSeries = vol?.monthly?.[volKey] || [];
+
+          occupancyLineChart?.setOption({
+            grid: { left: 40, right: 12, top: 10, bottom: 26 },
+            tooltip: { trigger: "axis" },
+            xAxis: {
+              type: "category",
+              data: hours,
+              axisTick: { show: false },
+              axisLine: { lineStyle: { color: "#cbd5e1" } },
+              axisLabel: { color: "#64748b", fontSize: 10 },
+            },
+            yAxis: {
+              type: "value",
+              splitLine: { lineStyle: { color: "rgba(148,163,184,0.35)" } },
+              axisLabel: { color: "#64748b", fontSize: 10 },
+            },
+            series: [
+              {
+                name: "占用率",
+                type: "line",
+                smooth: true,
+                data: occSeries.map((v) => +Number(v).toFixed(2)),
+                lineStyle: { width: 2, color: "#10b981" },
+                itemStyle: { color: "#10b981" },
+              },
+            ],
+          });
+
+          volumeLineChart?.setOption({
+            grid: { left: 40, right: 12, top: 10, bottom: 26 },
+            tooltip: { trigger: "axis" },
+            xAxis: {
+              type: "category",
+              data: hours,
+              axisTick: { show: false },
+              axisLine: { lineStyle: { color: "#cbd5e1" } },
+              axisLabel: { color: "#64748b", fontSize: 10 },
+            },
+            yAxis: {
+              type: "value",
+              splitLine: { lineStyle: { color: "rgba(148,163,184,0.35)" } },
+              axisLabel: { color: "#64748b", fontSize: 10 },
+            },
+            series: [
+              {
+                name: "充电量",
+                type: "line",
+                smooth: true,
+                data: volSeries.map((v) => +Number(v).toFixed(2)),
+                lineStyle: { width: 2, color: "#8b5cf6" },
+                itemStyle: { color: "#8b5cf6" },
+              },
+            ],
+          });
+        }
+
+        dailyLineChart.setOption({
+          grid: { left: 40, right: 12, top: 10, bottom: 26 },
+          tooltip: { trigger: "axis" },
+          xAxis: {
+            type: "category",
+            data: hours,
+            axisTick: { show: false },
+            axisLine: { lineStyle: { color: "#cbd5e1" } },
+            axisLabel: { color: "#64748b", fontSize: 10 },
+          },
+          yAxis: {
+            type: "value",
+            splitLine: { lineStyle: { color: "rgba(148,163,184,0.35)" } },
+            axisLabel: { color: "#64748b", fontSize: 10 },
+          },
+          series: [
+            {
+              type: "line",
+              smooth: true,
+              data: daily.map((v) => +Number(v).toFixed(3)),
+              lineStyle: { width: 2, color: kind === "e_price" ? "#2563eb" : "#f97316" },
+              itemStyle: { color: kind === "e_price" ? "#2563eb" : "#f97316" },
+            },
+          ],
+        });
+
+        const heatValues = [];
+        heatMatrix.forEach((row, d) => {
+          row.forEach((v, h) => {
+            heatValues.push([h, d, +Number(v).toFixed(3)]);
+          });
+        });
+        const heatNums = heatValues.map((x) => Number(x[2] || 0));
+        const hmMin = dataByKind?.stats?.min ?? (heatNums.length ? Math.min(...heatNums) : 0);
+        const hmMax = dataByKind?.stats?.max ?? (heatNums.length ? Math.max(...heatNums) : 1);
+
+        priceHeatChart.setOption({
+          tooltip: {
+            position: "top",
+            formatter: (p) => {
+              const d = days[p.data[1]];
+              const h = String(p.data[0]).padStart(2, "0");
+              return `${d} ${h}:00<br/>${kind === "e_price" ? "电价" : "服务费"}: ${p.data[2]}`;
+            },
+          },
+          grid: { top: 10, bottom: 36, left: 52, right: 10 },
+          xAxis: {
+            type: "category",
+            data: hours,
+            axisLabel: { color: "#64748b", fontSize: 10 },
+            axisLine: { lineStyle: { color: "#cbd5e1" } },
+          },
+          yAxis: {
+            type: "category",
+            data: days,
+            axisLabel: { color: "#64748b", fontSize: 10 },
+            axisLine: { lineStyle: { color: "#cbd5e1" } },
+          },
+          visualMap: {
+            min: hmMin,
+            max: hmMax,
+            calculable: true,
+            orient: "horizontal",
+            left: "center",
+            bottom: 4,
+            inRange: { color: ["#f1f5f9", "#cbd5f5", "#94a3b8", "#f8c291", "#e17055"] },
+            textStyle: { color: "#64748b", fontSize: 10 },
+            formatter: (value) => Number(value).toFixed(2),
+          },
+          series: [
+            {
+              type: "heatmap",
+              data: heatValues,
+              label: {
+                show: false,
+              },
+              emphasis: {
+                itemStyle: { shadowBlur: 6, shadowColor: "rgba(15,23,42,0.18)" },
+              },
+              progressive: 2000,
+              animation: false,
+            },
+          ],
+        });
+      }
+
+      function setCompareBarOption({ current, optimized }) {
+        compareBarChart.setOption({
+          grid: { left: 40, right: 14, top: 16, bottom: 28 },
+          xAxis: {
+            type: "category",
+            data: ["当前策略", "AI 优化策略"],
+            axisLine: { lineStyle: { color: "#cbd5e1" } },
+            axisLabel: { color: "#64748b", fontSize: 10 },
+          },
+          yAxis: {
+            type: "value",
+            axisLabel: { color: "#64748b", fontSize: 10 },
+            splitLine: { lineStyle: { color: "rgba(148,163,184,0.35)" } },
+          },
+          tooltip: { trigger: "axis" },
+          series: [
+            {
+              type: "bar",
+              data: [
+                { value: current, itemStyle: { color: "rgba(2,6,23,0.18)" } },
+                { value: optimized, itemStyle: { color: "rgba(37,99,235,0.85)" } },
+              ],
+              barWidth: 34,
+              borderRadius: [10, 10, 6, 6],
+            },
+          ],
+        });
+      }
+
+      function setTidalLineOption() {
+        tidalLineChart.setOption({
+          tooltip: { trigger: "axis" },
+          legend: {
+            data: ["商务与住宅", "餐饮服务", "生活服务"],
+            textStyle: { color: "#334155", fontSize: 11 },
+          },
+          grid: { left: 40, right: 16, top: 34, bottom: 28 },
+          xAxis: {
+            type: "category",
+            boundaryGap: false,
+            data: ["0", "4", "8", "12", "16", "20", "24"],
+            axisLine: { lineStyle: { color: "#cbd5e1" } },
+            axisLabel: { color: "#64748b", fontSize: 10 },
+          },
+          yAxis: {
+            type: "value",
+            splitLine: { lineStyle: { color: "rgba(148,163,184,0.35)" } },
+            axisLabel: { color: "#64748b", fontSize: 10 },
+          },
+          series: [
+            {
+              name: "商务与住宅",
+              type: "line",
+              smooth: true,
+              data: [20, 30, 55, 70, 65, 50, 30],
+              lineStyle: { width: 3, color: POI_COLORS["商务与住宅"] },
+              itemStyle: { color: POI_COLORS["商务与住宅"] },
+              areaStyle: { color: "rgba(29,78,216,0.10)" },
+            },
+            {
+              name: "餐饮服务",
+              type: "line",
+              smooth: true,
+              data: [10, 15, 35, 55, 75, 60, 25],
+              lineStyle: { width: 3, color: POI_COLORS["餐饮服务"] },
+              itemStyle: { color: POI_COLORS["餐饮服务"] },
+              areaStyle: { color: "rgba(15,118,110,0.10)" },
+            },
+            {
+              name: "生活服务",
+              type: "line",
+              smooth: true,
+              data: [8, 12, 25, 40, 45, 35, 18],
+              lineStyle: { width: 3, color: POI_COLORS["生活服务"] },
+              itemStyle: { color: POI_COLORS["生活服务"] },
+              areaStyle: { color: "rgba(185,28,28,0.10)" },
+            },
+          ],
+        });
+      }
+
+      function setSpillGraphOption() {
+        spillGraphChart.setOption({
+          tooltip: {},
+          series: [
+            {
+              type: "graph",
+              layout: "force",
+              roam: true,
+              label: { show: true, color: "#0f172a", fontSize: 11, fontWeight: 700 },
+              force: { repulsion: 150, edgeLength: 90 },
+              lineStyle: { color: "rgba(37,99,235,0.45)", width: 2 },
+              data: [
+                { name: "南山商务圈", value: 10, symbolSize: 30, itemStyle: { color: "rgba(37,99,235,0.85)" } },
+                { name: "福田CBD", value: 9, symbolSize: 28, itemStyle: { color: "rgba(6,182,212,0.85)" } },
+                { name: "前海自贸区", value: 8, symbolSize: 26, itemStyle: { color: "rgba(225,29,72,0.75)" } },
+                { name: "宝安生活区", value: 6, symbolSize: 22, itemStyle: { color: "rgba(15,118,110,0.75)" } },
+                { name: "龙华生活区", value: 5, symbolSize: 20, itemStyle: { color: "rgba(234,179,8,0.75)" } },
+              ],
+              links: [
+                { source: "南山商务圈", target: "福田CBD", value: 0.42 },
+                { source: "南山商务圈", target: "前海自贸区", value: 0.38 },
+                { source: "福田CBD", target: "宝安生活区", value: 0.26 },
+                { source: "前海自贸区", target: "宝安生活区", value: 0.22 },
+                { source: "前海自贸区", target: "龙华生活区", value: 0.18 },
+              ],
+            },
+          ],
+        });
+      }
+
+      // ----------------------------
+      // Station select + simulator
+      // ----------------------------
+      const ui = {
+        stationContext: () => document.getElementById("stationContext"),
+        stationSearch: () => document.getElementById("stationSearch"),
+        stationSearchHint: () => document.getElementById("stationSearchHint"),
+        stationFile: () => document.getElementById("stationFile"),
+
+        dName: () => document.getElementById("d-name"),
+        dPoi: () => document.getElementById("d-poi"),
+        dLL: () => document.getElementById("d-ll"),
+        dCount: () => document.getElementById("d-count"),
+        dArea: () => document.getElementById("d-area"),
+        dScore: () => document.getElementById("d-score"),
+      };
+
+      const simUI = {
+        station: () => document.getElementById("simStation"),
+        category: () => document.getElementById("simCategory"),
+        baseFee: () => document.getElementById("simBaseFee"),
+        baseFeeValue: () => document.getElementById("simBaseFeeValue"),
+        occ: () => document.getElementById("simOcc"),
+        profit: () => document.getElementById("simProfit"),
+        strategy: () => document.getElementById("simStrategy"),
+        tableBody: () => document.getElementById("simTableBody"),
+      };
+
+      function selectStation(station, { silent = false } = {}) {
+        selectedStation = station;
+
+        if (ui.stationContext()) {
+          ui.stationContext().textContent = station ? `当前站点：${station.id}` : "当前站点：未选择";
+        }
+
+        if (ui.dName()) ui.dName().textContent = station ? station.name : "-";
+        if (ui.dPoi())
+          ui.dPoi().innerHTML = station
+            ? `<span style="color:${POI_COLORS[station.poiCategory] || "#0f172a"}">${station.poiCategory}</span>`
+            : "-";
+        if (ui.dLL()) ui.dLL().textContent = station ? `${station.lat.toFixed(5)}, ${station.lng.toFixed(5)}` : "-";
+        if (ui.dCount()) ui.dCount().textContent = station ? String(station.chargeCount ?? "-") : "-";
+        if (ui.dArea()) ui.dArea().textContent = station ? `${Math.round(station.area || 0)} ㎡` : "-";
+        if (ui.dScore()) ui.dScore().textContent = station ? station.demandScore.toFixed(2) : "-";
+
+        if (station && typeof PRICE_DATA !== "undefined") {
+          setPriceCharts(station);
+        }
+
+        if (station) {
+          setPriceCharts(station);
+          updateSimulatorFromStation();
+        } else if (!silent && ui.stationSearchHint()) {
+          ui.stationSearchHint().textContent = "未找到该站点号，请检查输入（如 102）。";
+        }
+      }
+
+      // ----------------------------
+      // Simulator data + logic
+      // ----------------------------
+      const SIM_CATEGORIES = {
+        "Lifestyle Services": {
+          label: "生活服务区",
+          elasticity: -5.60,
+          weekendBoost: 0.1046,
+          rainBoost: -0.18,
+          strategy: "薄利多销",
+        },
+        "Food and Beverage Services": {
+          label: "餐饮服务区",
+          elasticity: -6.08,
+          weekendBoost: 0.094,
+          rainBoost: -0.25,
+          strategy: "阶梯定价",
+        },
+        "Business and Residential": {
+          label: "商务与住宅区",
+          elasticity: -2.34,
+          weekendBoost: 0.1315,
+          rainBoost: 0.05,
+          strategy: "保持高单价",
+        },
+      };
+
+      let simTableCache = [];
+
+      function initSimulator() {
+        const stationSelect = simUI.station();
+        if (stationSelect && stations.length) {
+          stationSelect.innerHTML =
+            '<option value="">自动跟随地图选中</option>' +
+            stations
+              .slice(0, 275)
+              .map((s) => `<option value="${s.id}">${s.id} · ${s.poiCategory}</option>`)
+              .join("");
+        }
+        updateSimulator();
+      }
+
+      function updateSimulatorFromStation() {
+        const station = selectedStation;
+        if (!station || !simUI.category()) return;
+        const categoryMap = {
+          生活服务: "Lifestyle Services",
+          餐饮服务: "Food and Beverage Services",
+          商务与住宅: "Business and Residential",
+        };
+        const mapped = categoryMap[station.poiCategory] || "Business and Residential";
+        simUI.category().value = mapped;
+        if (simUI.station()) simUI.station().value = station.id;
+        updateSimulator();
+      }
+
+      function getSimulatorState() {
+        const category = simUI.category()?.value || "Business and Residential";
+        const baseFee = parseFloat(simUI.baseFee()?.value || "0.4");
+        const dayType = document.querySelector("[data-sim-day].active")?.dataset.simDay || "weekday";
+        const weather = document.querySelector("[data-sim-weather].active")?.dataset.simWeather || "sunny";
+        const stationId = simUI.station()?.value || "";
+        return { category, baseFee, dayType, weather, stationId };
+      }
+
+      function updateSimulator() {
+        const state = getSimulatorState();
+        if (simUI.baseFeeValue()) simUI.baseFeeValue().textContent = state.baseFee.toFixed(2);
+
+        const info = SIM_CATEGORIES[state.category] || SIM_CATEGORIES["Business and Residential"];
+        const dayMultiplier = state.dayType === "weekend" ? 1 + info.weekendBoost : 1;
+        const weatherMultiplier = state.weather === "rain" ? 1 + info.rainBoost : 1;
+
+        const stationId = state.stationId || selectedStation?.id;
+        const stationObj = stationId ? stations.find((s) => s.id === stationId) : null;
+        const price = typeof PRICE_DATA !== "undefined" ? PRICE_DATA : null;
+        const flow = typeof FLOW_DATA !== "undefined" ? FLOW_DATA : null;
+
+        const hours = Array.from({ length: 24 }, (_, i) => i);
+
+        const defaultBase = hours.map(() => 0.55);
+        const defaultOpt = hours.map(() => 0.62);
+
+        const monthKey = (() => {
+          const metaMonths = price?.meta?.months || [];
+          return metaMonths[metaMonths.length - 1] || "";
+        })();
+
+        const baseSeries = stationId && price?.s_price?.[stationId]
+          ? (price.s_price[stationId].monthly_hourly_avg?.[monthKey] || price.s_price[stationId].hourly_avg || defaultBase)
+          : defaultBase;
+
+        const eSeries = stationId && price?.e_price?.[stationId]
+          ? (price.e_price[stationId].monthly_hourly_avg?.[monthKey] || price.e_price[stationId].hourly_avg || defaultBase)
+          : defaultBase;
+
+        if (!state.stationId && stationObj && simUI.station()) {
+          simUI.station().value = stationObj.id;
+        }
+
+        const adjustedBase = baseSeries.map((v) => Number(v || 0) * dayMultiplier * weatherMultiplier);
+        const optSeries = adjustedBase.map((v, idx) => {
+          const peak = idx >= 10 && idx <= 18 ? 0.08 : idx <= 6 ? -0.06 : 0;
+          const base = Math.max(0.15, Math.min(0.9, v + peak));
+          return Math.max(0.15, Math.min(0.9, base + (state.baseFee - 0.4) * 0.2));
+        });
+
+        const occSeries = stationId && flow?.occupancy?.[stationId]
+          ? flow.occupancy[stationId].monthly?.[monthKey] || []
+          : [];
+
+        const occBase = occSeries.length
+          ? occSeries.reduce((sum, v) => sum + Number(v || 0), 0) / occSeries.length
+          : 0.35;
+        const occOptimized = occBase * (1 + (info.elasticity < -4 ? 0.15 : 0.06)) * (state.weather === "rain" ? 0.9 : 1);
+        const occLift = (occOptimized - occBase) * 100;
+
+        const baseProfit = adjustedBase.reduce((sum, v, idx) => sum + (v + eSeries[idx]) * (occBase * 10), 0);
+        const optProfit = optSeries.reduce((sum, v, idx) => sum + (v + eSeries[idx]) * (occOptimized * 10), 0);
+        const profitInc = ((optProfit - baseProfit) / Math.max(1, baseProfit)) * 100;
+
+        if (simUI.occ()) simUI.occ().textContent = `${occLift >= 0 ? "+" : ""}${occLift.toFixed(2)}%`;
+        if (simUI.profit()) simUI.profit().textContent = `${profitInc >= 0 ? "+" : ""}${profitInc.toFixed(2)}%`;
+        if (simUI.strategy()) simUI.strategy().textContent = info.strategy;
+
+        simPriceChart?.setOption({
+          grid: { left: 50, right: 50, top: 18, bottom: 30 },
+          tooltip: { trigger: "axis" },
+          legend: { data: ["原始服务费", "优化后服务费", "原始服务费柱", "优化后服务费柱"], textStyle: { color: "#475569", fontSize: 10 } },
+          xAxis: {
+            type: "category",
+            data: hours,
+            axisLine: { lineStyle: { color: "#cbd5e1" } },
+            axisLabel: { color: "#64748b", fontSize: 10 },
+          },
+          yAxis: [
+            {
+              type: "value",
+              name: "单价(元/kWh)",
+              axisLabel: { color: "#64748b", fontSize: 10 },
+              splitLine: { lineStyle: { color: "rgba(148,163,184,0.35)" } },
+            },
+            {
+              type: "value",
+              name: "单价(柱)",
+              axisLabel: { color: "#94a3b8", fontSize: 10 },
+              splitLine: { show: false },
+            },
+          ],
+          series: [
+            {
+              name: "原始服务费",
+              type: "line",
+              smooth: true,
+              data: adjustedBase.map((v) => +v.toFixed(2)),
+              yAxisIndex: 0,
+              lineStyle: { width: 2, color: "#64748b" },
+              itemStyle: { color: "#64748b" },
+            },
+            {
+              name: "优化后服务费",
+              type: "line",
+              smooth: true,
+              data: optSeries.map((v) => +v.toFixed(2)),
+              yAxisIndex: 0,
+              lineStyle: { width: 2, color: "#f97316" },
+              itemStyle: { color: "#f97316" },
+            },
+            {
+              name: "原始服务费柱",
+              type: "bar",
+              yAxisIndex: 1,
+              data: adjustedBase.map((v) => +v.toFixed(2)),
+              itemStyle: { color: "rgba(148,163,184,0.35)" },
+              barGap: "20%",
+            },
+            {
+              name: "优化后服务费柱",
+              type: "bar",
+              yAxisIndex: 1,
+              data: optSeries.map((v) => +v.toFixed(2)),
+              itemStyle: { color: "rgba(249,115,22,0.25)" },
+            },
+          ],
+        });
+
+        simOccChart?.setOption({
+          title: { text: "占用率提升", left: "center", top: 6, textStyle: { fontSize: 12, color: "#0f172a" } },
+          xAxis: {
+            type: "category",
+            data: ["当前", "优化"],
+            axisLine: { lineStyle: { color: "#cbd5e1" } },
+            axisLabel: { color: "#64748b", fontSize: 10 },
+          },
+          yAxis: {
+            type: "value",
+            splitLine: { lineStyle: { color: "rgba(148,163,184,0.35)" } },
+            axisLabel: { color: "#64748b", fontSize: 10 },
+          },
+          series: [
+            {
+              type: "bar",
+              data: [+(occBase * 100).toFixed(2), +(occOptimized * 100).toFixed(2)],
+              itemStyle: { color: "rgba(16,185,129,0.65)" },
+            },
+          ],
+        });
+
+        simProfitChart?.setOption({
+          title: { text: "利润增幅", left: "center", top: 6, textStyle: { fontSize: 12, color: "#0f172a" } },
+          xAxis: {
+            type: "category",
+            data: ["当前", "优化"],
+            axisLine: { lineStyle: { color: "#cbd5e1" } },
+            axisLabel: { color: "#64748b", fontSize: 10 },
+          },
+          yAxis: {
+            type: "value",
+            splitLine: { lineStyle: { color: "rgba(148,163,184,0.35)" } },
+            axisLabel: { color: "#64748b", fontSize: 10 },
+          },
+          series: [
+            {
+              type: "bar",
+              data: [+(baseProfit / 100).toFixed(2), +(optProfit / 100).toFixed(2)],
+              itemStyle: { color: "rgba(59,130,246,0.65)" },
+            },
+          ],
+        });
+
+        const rows = hours.map((h) => {
+          const priceVal = optSeries[h];
+          const label = h <= 6 ? "低谷" : h <= 10 ? "平段" : h <= 18 ? "峰段" : "晚峰";
+          const note = label === "低谷" ? "引流补贴" : label === "峰段" ? "高峰溢价" : "稳定覆盖";
+          return { period: `${String(h).padStart(2, "0")}:00-${String((h + 1) % 24).padStart(2, "0")}:00`, price: priceVal, label, note };
+        });
+
+        if (simUI.tableBody()) {
+          simUI.tableBody().innerHTML = rows
+            .map(
+              (r) => `
+                <tr>
+                  <td>${r.period}</td>
+                  <td>${r.price.toFixed(2)}</td>
+                  <td>${r.label}</td>
+                  <td>${r.note}</td>
+                </tr>
+              `
+            )
+            .join("");
+        }
+
+        simTableCache = rows;
+      }
+
+      function exportSimTable() {
+        if (!simTableCache.length) return;
+        const header = ["时段", "推荐服务费", "定价标签", "解释"];
+        const csvRows = [header.join(",")];
+        simTableCache.forEach((r) => {
+          csvRows.push([r.period, r.price.toFixed(3), r.label, r.note].join(","));
+        });
+        const blob = new Blob(["\ufeff" + csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const dateStr = new Date().toISOString().slice(0, 10);
+        a.href = url;
+        a.download = `定价策略表_${dateStr}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      // ----------------------------
+      // Resources render
+      // ----------------------------
+      let paperFilter = "all";
+      let paperQuery = "";
+
+      function renderPapers() {
+        const grid = document.getElementById("paperGrid");
+        const q = paperQuery.trim().toLowerCase();
+        const filtered = papers.filter((p) => {
+          const passType = paperFilter === "all" ? true : p.type === paperFilter;
+          if (!passType) return false;
+          if (!q) return true;
+          const hay = `${p.title} ${p.authors} ${p.abstract} ${(p.tags || []).join(" ")}`.toLowerCase();
+          return hay.includes(q);
+        });
+
+        const iconSvg = `
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 7h10M7 11h10M7 15h7" />
+            <path d="M6 3h9l3 3v15a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3Z" />
+          </svg>
+        `;
+
+        grid.innerHTML =
+          filtered
+            .map((p) => {
+              const localHref = p.localFile ? encodeURI("./" + p.localFile) : "";
+              const sourceBtn = p.sourceUrl
+                ? `<a class="linkBtn" href="${escapeAttr(p.sourceUrl)}" target="_blank" rel="noreferrer">来源链接</a>`
+                : `<span class="linkBtn secondary" style="opacity:.7; cursor:not-allowed">来源链接</span>`;
+
+              const downloadBtn = localHref
+                ? `<a class="linkBtn secondary" href="${escapeAttr(localHref)}" download>下载文件</a>`
+                : `<span class="linkBtn secondary" style="opacity:.7; cursor:not-allowed">下载文件</span>`;
+
+              const actionBtns =
+                p.id === "our-paper"
+                  ? `<a class="linkBtn" href="#/analytics">查看详情</a>`
+                  : `${sourceBtn}${downloadBtn}`;
+
+              const extra =
+                (p.extraUrls || []).length > 0
+                  ? `<div class="badgeRow">
+                      ${(p.extraUrls || [])
+                        .map(
+                          (u) =>
+                            `<a class="miniBadge" style="text-decoration:none" href="${escapeAttr(u.url)}" target="_blank" rel="noreferrer">${escapeHtml(u.label)}</a>`
+                        )
+                        .join("")}
+                    </div>`
+                  : "";
+
+              return `
+                <article class="paperCard">
+                  <div>
+                    <div class="paperTop">
+                      <div class="paperIcon">${iconSvg}</div>
+                      <div class="paperMeta">
+                        <h3>${escapeHtml(p.title)}</h3>
+                        <div class="authors">${escapeHtml(p.authors)}</div>
+                        <div class="badgeRow">
+                          ${(p.tags || [])
+                            .slice(0, 5)
+                            .map((t) => `<span class="miniBadge">${escapeHtml(t)}</span>`)
+                            .join("")}
+                        </div>
+                        ${extra}
+                      </div>
+                    </div>
+
+                    <details class="absDetails" style="margin-top: 12px">
+                      <summary>
+                        <span>摘要与要点</span>
+                        <span style="color: rgba(100,116,139,0.9); font-weight:900">展开/收起</span>
+                      </summary>
+                      <p>${escapeHtml(p.abstract)}</p>
+                    </details>
+                  </div>
+
+                  <div class="paperActions ${p.id === "our-paper" ? "single" : ""}">
+                    ${actionBtns}
+                  </div>
+                </article>
+              `;
+            })
+            .join("") || `<div class="hint">未找到匹配结果。</div>`;
+      }
+
+      function bindPaperUI() {
+        const input = document.getElementById("paperSearch");
+        const filters = document.getElementById("paperFilters");
+        if (!input || !filters) return;
+
+        input.addEventListener("input", () => {
+          paperQuery = input.value || "";
+          renderPapers();
+        });
+
+        filters.addEventListener("click", (e) => {
+          const btn = e.target.closest("[data-filter]");
+          if (!btn) return;
+          paperFilter = btn.dataset.filter;
+          filters.querySelectorAll(".chipBtn").forEach((b) => b.classList.toggle("active", b.dataset.filter === paperFilter));
+          renderPapers();
+        });
+      }
+
+      // ----------------------------
+      // Wire up events
+      // ----------------------------
+      function bindEvents() {
+        document.getElementById("btn-station-search")?.addEventListener("click", () => {
+          handleStationSearch();
+        });
+        ui.stationSearch()?.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") handleStationSearch();
+        });
+
+        document.getElementById("avgYear")?.addEventListener("change", () => {
+          if (selectedStation) setPriceCharts(selectedStation);
+        });
+        document.getElementById("avgMonth")?.addEventListener("change", () => {
+          if (selectedStation) setPriceCharts(selectedStation);
+        });
+        document.getElementById("priceYear")?.addEventListener("change", () => {
+          if (selectedStation) setPriceCharts(selectedStation);
+        });
+        document.getElementById("priceMonth")?.addEventListener("change", () => {
+          if (selectedStation) setPriceCharts(selectedStation);
+        });
+        document.getElementById("priceDay")?.addEventListener("change", () => {
+          if (selectedStation) setPriceCharts(selectedStation);
+        });
+        document.getElementById("priceKind")?.addEventListener("change", () => {
+          if (selectedStation) setPriceCharts(selectedStation);
+        });
+        document.getElementById("flowYear")?.addEventListener("change", () => {
+          if (selectedStation) setPriceCharts(selectedStation);
+        });
+        document.getElementById("flowMonth")?.addEventListener("change", () => {
+          if (selectedStation) setPriceCharts(selectedStation);
+        });
+        document.getElementById("volumeYear")?.addEventListener("change", () => {
+          if (selectedStation) setPriceCharts(selectedStation);
+        });
+        document.getElementById("volumeMonth")?.addEventListener("change", () => {
+          if (selectedStation) setPriceCharts(selectedStation);
+        });
+
+        document.getElementById("simCategory")?.addEventListener("change", updateSimulator);
+        document.getElementById("simBaseFee")?.addEventListener("input", updateSimulator);
+        document.getElementById("simStation")?.addEventListener("change", (e) => {
+          const id = e.target.value;
+          if (!id) {
+            if (selectedStation) {
+              selectStation(selectedStation, { silent: true });
+              updateSimulatorFromStation();
+            } else {
+              updateSimulator();
+            }
+            return;
+          }
+          const st = stations.find((s) => s.id === id);
+          if (st) {
+            selectStation(st, { silent: true });
+            updateSimulatorFromStation();
+          }
+        });
+        document.querySelectorAll("[data-sim-day]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            document.querySelectorAll("[data-sim-day]").forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            updateSimulator();
+          });
+        });
+        document.querySelectorAll("[data-sim-weather]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            document.querySelectorAll("[data-sim-weather]").forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            updateSimulator();
+          });
+        });
+        document.getElementById("simExport")?.addEventListener("click", exportSimTable);
+      }
+
+      function handleStationSearch() {
+        const input = ui.stationSearch();
+        if (!input) return;
+        const query = input.value.trim();
+        if (!query) return;
+
+        const qUpper = query.toUpperCase();
+        const foundZone = stations.find((s) => s.id === query || s.id.toUpperCase() === qUpper);
+        const foundStation = stationPoints.find(
+          (s) => String(s.stationid).toUpperCase() === qUpper || String(s.stationid) === query
+        );
+
+        const target = foundZone || (foundStation ? stations.find((z) => z.id === String(foundStation.tazid)) : null);
+        if (target) {
+          if (ui.stationSearchHint()) {
+            const tag = foundZone ? `区域 ${target.id}` : `站点 ${foundStation.stationid}（区 ${foundStation.tazid}）`;
+            ui.stationSearchHint().textContent = `已定位到 ${tag}`;
+          }
+          selectStation(target, { silent: true });
+          location.hash = "#/stations";
+        } else {
+          selectStation(null);
+        }
+      }
+
+      // ----------------------------
+      // Utilities
+      // ----------------------------
+      function escapeHtml(str) {
+        return String(str)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+      function escapeAttr(str) {
+        return escapeHtml(str).replaceAll("`", "&#96;");
+      }
+
+      // ----------------------------
+      // Boot
+      // ----------------------------
+      (function boot() {
+        renderPapers();
+        bindPaperUI();
+        bindEvents();
+        window.addEventListener("resize", resizeAllCharts);
+
+        initStationsData().then(() => {
+          if (stations.length) {
+            selectStation(stations[0], { silent: true });
+          }
+          const hash = location.hash.replace("#", "") || "/home";
+          setRoute(hash);
+        });
+      })();
+
+      function ensureDashboardReady() {
+        if (!dashboardReady) {
+          initMap();
+          initChartsDashboard();
+          updateSimulator();
+          dashboardReady = true;
+        } else {
+          try {
+            map && map.invalidateSize(true);
+          } catch (_) {}
+        }
+
+        if (stations.length > 0) {
+          renderStations();
+        }
+      }
+
+      function ensureStationsReady() {
+        if (!stationsReady) {
+          initChartsStations();
+          stationsReady = true;
+        }
+      }
+
+      function ensureAnalyticsReady() {
+        if (!analyticsReady) {
+          analyticsReady = true;
+        }
+      }
+    </script>
+  </body>
+</html>
+

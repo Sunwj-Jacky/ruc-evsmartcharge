@@ -1,0 +1,8 @@
+Weather Data Table Header：
+
+T：Air temperature (degree Celsius) at 2 metre height above the earth's surfuce.
+P0: Atmospheric pressure at weather station level (millimeters of mercury).
+P: Atmospheric pressure reduced to mean sea level (millimeters of mercury).
+U: Relative humidty (%) at a height of 2 metres above the earth's surface.
+nRAIN: 0-normal,1-light rain, 2-moderate rain, 3-heavy rain.
+Td: Dewpoint temperature at a height of 2 metres above the earth's surface (degrees Celsius).
